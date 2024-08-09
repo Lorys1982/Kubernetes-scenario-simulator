@@ -1,0 +1,5 @@
+# Structure #
+  # filetype (pod, node, scheduler): filename vector
+  # vars (node number, settings)
+Cluster-name: my-cluster
+Scheduler-conf: kwok-most-allocated.yaml
