@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	_ "k8s.io/client-go"
 	"log"
 	"main/configs"
 	"main/utils"
@@ -21,13 +20,15 @@ func main() {
 	// Cluster Creation
 	utils.KwokctlCreate()
 
+	// Node Creation
+	utils.NodeCreate(configs.GetNodesConf())
+
 	// TODO whatever operation and instruction i want
-	for v := 0; v < 10; v++ {
+	for v := 0; v < 1; v++ {
 		fmt.Print(v, " ")
 		time.Sleep(1 * time.Second)
 	}
 
 	// Cluster Deletion
 	utils.KwokctlDelete()
-
 }
