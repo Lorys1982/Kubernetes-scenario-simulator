@@ -29,6 +29,9 @@ func main() {
 		time.Sleep(1 * time.Second)
 	}
 
+	// Copy and compress log file
+	utils.Compress("audit.log")
+
 	// Cluster Deletion
 	utils.KwokctlDelete()
 }
