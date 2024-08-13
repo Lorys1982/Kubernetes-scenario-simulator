@@ -1,11 +1,13 @@
 package utils
 
 import (
+	"io"
 	"log"
 	"main/configs"
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 )
 
 func CommandExists(command string) bool {
@@ -14,9 +16,23 @@ func CommandExists(command string) bool {
 }
 
 func commandRun(cmd *exec.Cmd) error {
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	err := cmd.Start()
+	outLog, err := os.OpenFile("Logs/stdOut.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	errLog, err := os.OpenFile("Logs/stdErr.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	commandString := strings.Join(cmd.Args, " ")
+
+	_, err = outLog.WriteString("Command: " + commandString + "\n")
+	if err != nil {
+		return err
+	}
+	_, err = errLog.WriteString("Command: " + commandString + "\n")
+	if err != nil {
+		return err
+	}
+
+	cmd.Stdout = io.MultiWriter(os.Stdout, outLog)
+	cmd.Stderr = io.MultiWriter(os.Stderr, errLog)
+
+	err = cmd.Start()
 	if err != nil {
 		return err
 	}
@@ -24,11 +40,39 @@ func commandRun(cmd *exec.Cmd) error {
 	if err != nil {
 		return err
 	}
+
+	_, err = outLog.WriteString("\n")
+	if err != nil {
+		return err
+	}
+	_, err = errLog.WriteString("\n")
+	if err != nil {
+		return err
+	}
+	defer outLog.Close()
+	defer errLog.Close()
+
 	return nil
 }
 
 func commandCleanRun(cmd *exec.Cmd) error {
-	err := cmd.Start()
+	outLog, err := os.OpenFile("Logs/stdOut.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	errLog, err := os.OpenFile("Logs/stdErr.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	commandString := strings.Join(cmd.Args, " ")
+
+	_, err = outLog.WriteString("Command: " + commandString + "\n")
+	if err != nil {
+		return err
+	}
+	_, err = errLog.WriteString("Command: " + commandString + "\n")
+	if err != nil {
+		return err
+	}
+
+	cmd.Stdout = outLog
+	cmd.Stderr = errLog
+
+	err = cmd.Start()
 	if err != nil {
 		return err
 	}
@@ -36,6 +80,18 @@ func commandCleanRun(cmd *exec.Cmd) error {
 	if err != nil {
 		return err
 	}
+
+	_, err = outLog.WriteString("\n")
+	if err != nil {
+		return err
+	}
+	_, err = errLog.WriteString("\n")
+	if err != nil {
+		return err
+	}
+	defer outLog.Close()
+	defer errLog.Close()
+
 	return nil
 }
 

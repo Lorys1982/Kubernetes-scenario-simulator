@@ -5,6 +5,8 @@ import (
 	"log"
 	"main/configs"
 	"main/utils"
+	"os"
+	"path"
 	"time"
 )
 
@@ -30,7 +32,8 @@ func main() {
 	}
 
 	// Copy and compress log file
-	utils.Compress("audit.log")
+	home, _ := os.UserHomeDir()
+	utils.Compress("audit.log", path.Join(home, ".kwok/clusters", configs.GetClusterName(), "logs"))
 
 	// Cluster Deletion
 	utils.KwokctlDelete()

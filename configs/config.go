@@ -81,7 +81,7 @@ func NewConfig() {
 	yamlfile, err := os.ReadFile("configs/config.yaml")
 
 	if err != nil {
-		log.Fatal("ERROR: readfile")
+		log.Fatal(err)
 	}
 	err = yaml.Unmarshal(yamlfile, &conf)
 	if err != nil {
