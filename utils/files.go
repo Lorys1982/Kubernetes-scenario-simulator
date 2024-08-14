@@ -8,6 +8,7 @@ import (
 	"strings"
 )
 
+// fileReplace Func to replace strings inside of files
 func fileReplace(fileName string, toReplace string, replace string, input ...byte) {
 	if len(input) == 0 {
 		var err error
@@ -25,6 +26,12 @@ func fileReplace(fileName string, toReplace string, replace string, input ...byt
 	}
 }
 
+// Compress func to compress files, taken in input fileName (name of the file to compress) and filePath (path to the dir
+// of the file to compress)
+//
+// # Output
+//
+// The compressed file will be a .gz
 func Compress(fileName string, filepath string) {
 	workingDir, _ := os.Getwd()
 

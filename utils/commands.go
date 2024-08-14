@@ -15,6 +15,7 @@ func CommandExists(command string) bool {
 	return err == nil
 }
 
+// TODO write comment to explain this functions
 func commandRun(cmd *exec.Cmd) error {
 	outLog, err := os.OpenFile("Logs/stdOut.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 	errLog, err := os.OpenFile("Logs/stdErr.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
@@ -55,6 +56,7 @@ func commandRun(cmd *exec.Cmd) error {
 	return nil
 }
 
+// TODO write comment to explain this functions
 func commandCleanRun(cmd *exec.Cmd) error {
 	outLog, err := os.OpenFile("Logs/stdOut.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 	errLog, err := os.OpenFile("Logs/stdErr.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
@@ -95,7 +97,9 @@ func commandCleanRun(cmd *exec.Cmd) error {
 	return nil
 }
 
-// selector:
+// clusterArgs function generates args for kwokctl create and kwokctl delete based on given configuration files
+//
+// # Selectors
 //
 //	false -> cluster deletion
 //	true -> cluster creation
@@ -153,11 +157,13 @@ func KubectlApply(toApply string) {
 	}
 }
 
+// TODO Write comment that ecplains what this does
 func NodeCreate(nodes []configs.Node) {
 	for _, node := range nodes {
 		nodeName := node.GetName()
 		nodeConfName := node.GetConfName()
 		replicas := node.GetReplicas()
+		currentIndex := node.GetCurrentIndex()
 
 		input, err := os.ReadFile(nodeConfName)
 		if err != nil {
@@ -165,9 +171,11 @@ func NodeCreate(nodes []configs.Node) {
 		}
 
 		for i := range replicas {
-			fileReplace(nodeConfName, nodeName, nodeName+"-"+strconv.Itoa(i), input...)
+			fileReplace(nodeConfName, nodeName, nodeName+"-"+strconv.Itoa(i+currentIndex), input...)
 			KubectlApply(nodeConfName)
 		}
-		fileReplace(nodeConfName, nodeName+"-"+strconv.Itoa(replicas), nodeName, input...)
+		// Just restores input (the initial file)
+		fileReplace(nodeConfName, "", "", input...)
+		node.SetCurrentIndex(replicas)
 	}
 }

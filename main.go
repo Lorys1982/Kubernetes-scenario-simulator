@@ -11,12 +11,15 @@ import (
 )
 
 func main() {
-	command := "kwokctl"
 	configs.NewConfig()
+	home, _ := os.UserHomeDir()
 
-	// checks if kwokctl is installed
-	if !utils.CommandExists(command) {
-		log.Fatal(command, " not installed")
+	// checks if kwokctl and kubectl is installed
+	if !utils.CommandExists("kwokctl") {
+		log.Fatal("kwokctl not installed")
+	}
+	if !utils.CommandExists("kubectl") {
+		log.Fatal("kubectl not installed")
 	}
 
 	// Cluster Creation
@@ -27,12 +30,14 @@ func main() {
 
 	// TODO whatever operation and instruction i want
 	for v := 0; v < 1; v++ {
-		fmt.Print(v, " ")
+		fmt.Println(v, " ")
 		time.Sleep(1 * time.Second)
 	}
 
+	// Test multiple node creations
+	utils.NodeCreate(configs.GetNodesConf())
+
 	// Copy and compress log file
-	home, _ := os.UserHomeDir()
 	utils.Compress("audit.log", path.Join(home, ".kwok/clusters", configs.GetClusterName(), "logs"))
 
 	// Cluster Deletion

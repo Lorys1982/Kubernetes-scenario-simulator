@@ -8,7 +8,7 @@ import (
 )
 
 var conf *Config
-var ni *nodeInfo
+var nodeCurrentReplicasVec []nodeCurrentReplicas
 
 type nodeInfo struct {
 	Metadata struct {
@@ -16,9 +16,39 @@ type nodeInfo struct {
 	} `yaml:"metadata"`
 }
 
+type nodeCurrentReplicas struct {
+	configName   string
+	currentIndex int
+}
+
 type Node struct {
 	ConfigName string `yaml:"name"`
 	Replicas   int    `yaml:"replicas"`
+}
+
+func (node Node) GetCurrentIndex() int {
+	configName := node.ConfigName
+	for i := range nodeCurrentReplicasVec {
+		if nodeCurrentReplicasVec[i].configName == configName {
+			return nodeCurrentReplicasVec[i].currentIndex
+		}
+	}
+	node.SetCurrentIndex(0)
+	return 0
+}
+
+func (node Node) SetCurrentIndex(index int) {
+	configName := node.ConfigName
+	for i := range nodeCurrentReplicasVec {
+		if nodeCurrentReplicasVec[i].configName == configName {
+			nodeCurrentReplicasVec[i].currentIndex = index
+			return
+		}
+	}
+	nodeCurrentReplicasVec = append(nodeCurrentReplicasVec, nodeCurrentReplicas{
+		configName:   configName,
+		currentIndex: 0,
+	})
 }
 
 func (node Node) GetConfName() string {
@@ -26,14 +56,15 @@ func (node Node) GetConfName() string {
 }
 
 func (node Node) GetName() string {
-	yamlfile, err := os.ReadFile(node.GetConfName())
+	yamlFile, err := os.ReadFile(node.GetConfName())
+	var ni *nodeInfo
 
 	if err != nil {
-		log.Fatal("ERROR: readfile")
+		log.Fatal(err)
 	}
-	err = yaml.Unmarshal(yamlfile, &ni)
+	err = yaml.Unmarshal(yamlFile, &ni)
 	if err != nil {
-		log.Fatal("ERROR: conversion")
+		log.Fatal(err)
 	}
 	return ni.Metadata.Name
 }
@@ -78,12 +109,12 @@ func fixFilePath() {
 }
 
 func NewConfig() {
-	yamlfile, err := os.ReadFile("configs/config.yaml")
+	yamlFile, err := os.ReadFile("configs/config.yaml")
 
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = yaml.Unmarshal(yamlfile, &conf)
+	err = yaml.Unmarshal(yamlFile, &conf)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
