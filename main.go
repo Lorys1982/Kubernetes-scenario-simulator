@@ -36,6 +36,8 @@ func main() {
 
 	// Test multiple node creations
 	utils.NodeCreate(configs.GetNodesConf())
+	// Test multinode deletion
+	utils.NodeDelete(configs.GetNodesConf())
 
 	// Copy and compress log file
 	utils.Compress("audit.log", path.Join(home, ".kwok/clusters", configs.GetClusterName(), "logs"))

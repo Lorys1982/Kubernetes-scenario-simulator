@@ -5,5 +5,5 @@ clusterName: my-cluster
 schedulerConfig: kwok-most-allocated.yaml
 nodes:
   - name: node.yaml
-    replicas: 5
+    count: 5
 auditLoggingConfig: audit-log-policy.yaml

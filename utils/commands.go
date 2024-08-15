@@ -157,12 +157,22 @@ func KubectlApply(toApply string) {
 	}
 }
 
+func KubectlDelete(resource string, toDelete string) {
+	args := []string{"delete", resource, toDelete}
+
+	cmd := exec.Command("kubectl", args...)
+	err := commandRun(cmd)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+}
+
 // TODO Write comment that ecplains what this does
 func NodeCreate(nodes []configs.Node) {
 	for _, node := range nodes {
 		nodeName := node.GetName()
 		nodeConfName := node.GetConfName()
-		replicas := node.GetReplicas()
+		replicas := node.GetCount()
 		currentIndex := node.GetCurrentIndex()
 
 		input, err := os.ReadFile(nodeConfName)
@@ -176,6 +186,20 @@ func NodeCreate(nodes []configs.Node) {
 		}
 		// Just restores input (the initial file)
 		fileReplace(nodeConfName, "", "", input...)
-		node.SetCurrentIndex(replicas)
+		node.SetCurrentIndex(replicas + currentIndex)
+	}
+}
+
+func NodeDelete(nodes []configs.Node) {
+	for _, node := range nodes {
+		nodeName := node.GetName()
+		toDelete := node.GetCount()
+		currentIndex := node.GetCurrentIndex() - 1
+
+		for range toDelete {
+			KubectlDelete("no", nodeName+"-"+strconv.Itoa(currentIndex))
+			currentIndex--
+		}
+		node.SetCurrentIndex(currentIndex)
 	}
 }

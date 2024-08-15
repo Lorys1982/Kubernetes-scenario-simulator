@@ -23,7 +23,7 @@ type nodeCurrentReplicas struct {
 
 type Node struct {
 	ConfigName string `yaml:"name"`
-	Replicas   int    `yaml:"replicas"`
+	Count      int    `yaml:"count"`
 }
 
 func (node Node) GetCurrentIndex() int {
@@ -69,8 +69,8 @@ func (node Node) GetName() string {
 	return ni.Metadata.Name
 }
 
-func (node Node) GetReplicas() int {
-	return node.Replicas
+func (node Node) GetCount() int {
+	return node.Count
 }
 
 type Config struct {
