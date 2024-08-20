@@ -1,1 +1,2 @@
-/configs/topology/
+/configs/topology/*
+/configs/command_configs/*

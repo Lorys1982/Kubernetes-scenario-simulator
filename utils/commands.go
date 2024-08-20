@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"main/configs"
@@ -8,6 +9,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func CommandExists(command string) bool {
@@ -15,10 +17,10 @@ func CommandExists(command string) bool {
 	return err == nil
 }
 
-// TODO write comment to explain this functions
+// TODO create the logs directory
 func commandRun(cmd *exec.Cmd) error {
-	outLog, err := os.OpenFile("Logs/stdOut.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	errLog, err := os.OpenFile("Logs/stdErr.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	outLog, err := os.OpenFile(fmt.Sprintf("Logs/%sStdOut.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	errLog, err := os.OpenFile(fmt.Sprintf("Logs/%sStdErr.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 	commandString := strings.Join(cmd.Args, " ")
 
 	_, err = outLog.WriteString("Command: " + commandString + "\n")
@@ -56,10 +58,10 @@ func commandRun(cmd *exec.Cmd) error {
 	return nil
 }
 
-// TODO write comment to explain this functions
+// TODO create the logs directory
 func commandCleanRun(cmd *exec.Cmd) error {
-	outLog, err := os.OpenFile("Logs/stdOut.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	errLog, err := os.OpenFile("Logs/stdErr.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	outLog, err := os.OpenFile(fmt.Sprintf("Logs/%sStdOut.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	errLog, err := os.OpenFile(fmt.Sprintf("Logs/%sStdErr.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 	commandString := strings.Join(cmd.Args, " ")
 
 	_, err = outLog.WriteString("Command: " + commandString + "\n")
@@ -95,6 +97,20 @@ func commandCleanRun(cmd *exec.Cmd) error {
 	defer errLog.Close()
 
 	return nil
+}
+
+func SequentialCommandRun(cmds []configs.CommandsList) {
+	for _, cfg := range cmds {
+		fullCmd := strings.Split(cfg.Exec, " ")
+		cmd := exec.Command(fullCmd[0], fullCmd[1:]...)
+		cmd.Dir = "configs/command_configs"
+		err := commandRun(cmd)
+		if err != nil {
+			log.Fatal(err.Error())
+		}
+		time.Sleep(time.Duration(cfg.Delay) * time.Second)
+		fmt.Println("slept ", cfg.Delay, " seconds")
+	}
 }
 
 // clusterArgs function generates args for kwokctl create and kwokctl delete based on given configuration files
@@ -167,7 +183,6 @@ func KubectlDelete(resource string, toDelete string) {
 	}
 }
 
-// TODO Write comment that ecplains what this does
 func NodeCreate(nodes []configs.Node) {
 	for _, node := range nodes {
 		nodeName := node.GetName()

@@ -1,13 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"main/configs"
 	"main/utils"
 	"os"
 	"path"
-	"time"
 )
 
 func main() {
@@ -28,11 +26,8 @@ func main() {
 	// Node Creation
 	utils.NodeCreate(configs.GetNodesConf())
 
-	// TODO whatever operation and instruction i want
-	for v := 0; v < 1; v++ {
-		fmt.Println(v, " ")
-		time.Sleep(1 * time.Second)
-	}
+	// Executes the commands with the specified delay
+	utils.SequentialCommandRun(configs.GetCommandsList())
 
 	// Test multiple node creations
 	utils.NodeCreate(configs.GetNodesConf())

@@ -1,9 +1,7 @@
-# Structure #
-  # filetype (pod, node, scheduler): filename vector
-  # vars (node number, settings)
 clusterName: my-cluster
 schedulerConfig: kwok-most-allocated.yaml
 nodes:
   - name: node.yaml
     count: 5
 auditLoggingConfig: audit-log-policy.yaml
+commandsConfig: config.yaml

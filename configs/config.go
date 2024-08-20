@@ -9,6 +9,27 @@ import (
 
 var conf *Config
 var nodeCurrentReplicasVec []nodeCurrentReplicas
+var commands *Commands
+
+type Config struct {
+	ClusterName string `yaml:"clusterName"`
+	Scheduler   string `yaml:"schedulerConfig"`
+	Nodes       []Node `yaml:"nodes"`
+	Audit       string `yaml:"auditLoggingConfig"`
+	Commands    string `yaml:"commandsConfig"`
+}
+
+type CommandsList struct {
+	Exec  string  `yaml:"exec"`
+	Delay float32 `yaml:"delay"`
+}
+
+type Commands struct {
+	Metadata struct {
+		Name string `yaml:"name"`
+	} `yaml:"metadata"`
+	Spec []CommandsList `yaml:"spec"`
+}
 
 type nodeInfo struct {
 	Metadata struct {
@@ -73,13 +94,6 @@ func (node Node) GetCount() int {
 	return node.Count
 }
 
-type Config struct {
-	ClusterName string `yaml:"clusterName"`
-	Scheduler   string `yaml:"schedulerConfig"`
-	Nodes       []Node `yaml:"nodes"`
-	Audit       string `yaml:"auditLoggingConfig"`
-}
-
 func GetClusterName() string {
 	return conf.ClusterName
 }
@@ -96,6 +110,14 @@ func GetAuditConf() string {
 	return conf.Audit
 }
 
+func GetCommandsName() string {
+	return commands.Metadata.Name
+}
+
+func GetCommandsList() []CommandsList {
+	return commands.Spec
+}
+
 func fixFilePath() {
 	if conf.Scheduler != "" {
 		conf.Scheduler = path.Join("configs", "topology", conf.Scheduler)
@@ -106,17 +128,30 @@ func fixFilePath() {
 	for i, node := range conf.Nodes {
 		conf.Nodes[i].ConfigName = path.Join("configs", "topology", node.ConfigName)
 	}
+	if conf.Commands != "" {
+		conf.Commands = path.Join("configs", "command_configs", conf.Commands)
+	}
 }
 
 func NewConfig() {
 	yamlFile, err := os.ReadFile("configs/config.yaml")
 
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(err.Error())
 	}
 	err = yaml.Unmarshal(yamlFile, &conf)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 	fixFilePath()
+
+	yamlFile, err = os.ReadFile(conf.Commands)
+
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	err = yaml.Unmarshal(yamlFile, &commands)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
 }

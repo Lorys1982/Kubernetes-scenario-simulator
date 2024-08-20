@@ -3,6 +3,7 @@ package utils
 import (
 	"compress/gzip"
 	"log"
+	"main/configs"
 	"os"
 	"path"
 	"strings"
@@ -37,7 +38,7 @@ func Compress(fileName string, filepath string) {
 
 	inFile := path.Join(filepath, fileName)
 	input, _ := os.ReadFile(inFile)
-	fileName = strings.Replace(fileName, ".log", ".gz", 1)
+	fileName = configs.GetCommandsName() + ".gz"
 
 	outFile := path.Join(workingDir, "Logs", fileName)
 	newFile, _ := os.Create(outFile)
