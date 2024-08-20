@@ -25,7 +25,9 @@ type CommandsList struct {
 }
 
 type Commands struct {
-	Metadata struct {
+	Kind       string `yaml:"kind"`
+	ApiVersion string `yaml:"apiVersion"`
+	Metadata   struct {
 		Name string `yaml:"name"`
 	} `yaml:"metadata"`
 	Spec []CommandsList `yaml:"spec"`

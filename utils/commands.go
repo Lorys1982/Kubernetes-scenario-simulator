@@ -19,8 +19,8 @@ func CommandExists(command string) bool {
 
 // TODO create the logs directory
 func commandRun(cmd *exec.Cmd) error {
-	outLog, err := os.OpenFile(fmt.Sprintf("Logs/%sStdOut.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	errLog, err := os.OpenFile(fmt.Sprintf("Logs/%sStdErr.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	outLog, err := os.OpenFile(fmt.Sprintf("logs/%s_StdOut.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	errLog, err := os.OpenFile(fmt.Sprintf("logs/%s_StdErr.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 	commandString := strings.Join(cmd.Args, " ")
 
 	_, err = outLog.WriteString("Command: " + commandString + "\n")
@@ -60,8 +60,8 @@ func commandRun(cmd *exec.Cmd) error {
 
 // TODO create the logs directory
 func commandCleanRun(cmd *exec.Cmd) error {
-	outLog, err := os.OpenFile(fmt.Sprintf("Logs/%sStdOut.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	errLog, err := os.OpenFile(fmt.Sprintf("Logs/%sStdErr.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	outLog, err := os.OpenFile(fmt.Sprintf("logs/%s_StdOut.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	errLog, err := os.OpenFile(fmt.Sprintf("logs/%s_StdErr.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 	commandString := strings.Join(cmd.Args, " ")
 
 	_, err = outLog.WriteString("Command: " + commandString + "\n")

@@ -40,7 +40,7 @@ func Compress(fileName string, filepath string) {
 	input, _ := os.ReadFile(inFile)
 	fileName = configs.GetCommandsName() + ".gz"
 
-	outFile := path.Join(workingDir, "Logs", fileName)
+	outFile := path.Join(workingDir, "logs", fileName)
 	newFile, _ := os.Create(outFile)
 	compressor := gzip.NewWriter(newFile)
 	_, err := compressor.Write(input)
