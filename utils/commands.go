@@ -108,8 +108,8 @@ func SequentialCommandRun(cmds []configs.CommandsList) {
 		if err != nil {
 			log.Fatal(err.Error())
 		}
+		fmt.Println("delay of ", cfg.Delay, " seconds")
 		time.Sleep(time.Duration(cfg.Delay) * time.Second)
-		fmt.Println("slept ", cfg.Delay, " seconds")
 	}
 }
 

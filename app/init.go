@@ -8,6 +8,7 @@ import (
 )
 
 func Init() {
+	// Directories Creation
 	err := os.MkdirAll("./logs", os.ModePerm)
 	if err != nil {
 		log.Fatal(err)
@@ -21,8 +22,8 @@ func Init() {
 		log.Fatal(err)
 	}
 
+	// Main config file template creation
 	file, err := os.OpenFile("configs/config.yaml", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0664)
-
 	if !os.IsExist(err) {
 		if err != nil {
 			log.Fatal(err)
@@ -48,6 +49,7 @@ func Init() {
 		}
 	}
 
+	// Commands config file template creation
 	file, err = os.OpenFile("configs/command_configs/config.yaml", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0664)
 	if !os.IsExist(err) {
 		if err != nil {
