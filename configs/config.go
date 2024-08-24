@@ -20,8 +20,11 @@ type Config struct {
 }
 
 type CommandsList struct {
-	Exec  string  `yaml:"exec"`
-	Delay float32 `yaml:"delay"`
+	Exec     string  `yaml:"exec"`
+	Delay    float32 `yaml:"delay"`
+	Command  string  `yaml:"command"`
+	Filename string  `yaml:"filename"`
+	Count    int     `yaml:"count"`
 }
 
 type Commands struct {
@@ -52,7 +55,7 @@ type Node struct {
 func (node Node) GetCurrentIndex() int {
 	configName := node.ConfigName
 	for i := range nodeCurrentReplicasVec {
-		if nodeCurrentReplicasVec[i].configName == configName {
+		if path.Base(nodeCurrentReplicasVec[i].configName) == path.Base(configName) {
 			return nodeCurrentReplicasVec[i].currentIndex
 		}
 	}
@@ -63,7 +66,7 @@ func (node Node) GetCurrentIndex() int {
 func (node Node) SetCurrentIndex(index int) {
 	configName := node.ConfigName
 	for i := range nodeCurrentReplicasVec {
-		if nodeCurrentReplicasVec[i].configName == configName {
+		if path.Base(nodeCurrentReplicasVec[i].configName) == path.Base(configName) {
 			nodeCurrentReplicasVec[i].currentIndex = index
 			return
 		}

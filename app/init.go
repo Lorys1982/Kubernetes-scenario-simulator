@@ -68,6 +68,12 @@ func Init() {
 						Exec:  "<command>",
 						Delay: 0,
 					},
+					{
+						Command:  "<wrapper command>",
+						Filename: "",
+						Count:    0,
+						Delay:    0,
+					},
 				},
 			})
 			if err != nil {

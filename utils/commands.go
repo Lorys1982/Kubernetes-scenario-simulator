@@ -7,10 +7,24 @@ import (
 	"main/configs"
 	"os"
 	"os/exec"
+	"path"
 	"strconv"
 	"strings"
 	"time"
 )
+
+type Node []configs.Node
+type Operations interface {
+	Create()
+	Delete()
+}
+
+func crashLog(err string) {
+	KwokctlDelete()
+	errLog, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	errLog.WriteString("Unexpected error: " + err + "\n")
+	log.Fatal(err)
+}
 
 func CommandExists(command string) bool {
 	_, err := exec.LookPath(command)
@@ -99,17 +113,70 @@ func commandCleanRun(cmd *exec.Cmd) error {
 	return nil
 }
 
+func execWrapper(fullCmd []string, cfg configs.CommandsList) {
+	action := -1
+	var object Operations
+
+	for _, cmd := range fullCmd {
+		switch cmd {
+		case "create":
+			action = 1
+			break
+		case "delete":
+			action = 0
+			break
+		case "node":
+			object = Node{
+				{
+					ConfigName: path.Join("configs/command_configs", cfg.Filename),
+					Count:      cfg.Count,
+				},
+			}
+			break
+		default:
+			crashLog(fmt.Sprintf("Command %s does not exist", cmd))
+		}
+	}
+	if object == nil {
+		crashLog("No object provided")
+	}
+
+	switch action {
+	case 1:
+		object.Create()
+		break
+	case 0:
+		object.Delete()
+		break
+	default:
+		crashLog("No action was provided")
+	}
+}
+
 func SequentialCommandRun(cmds []configs.CommandsList) {
 	for _, cfg := range cmds {
-		fullCmd := strings.Split(cfg.Exec, " ")
-		cmd := exec.Command(fullCmd[0], fullCmd[1:]...)
-		cmd.Dir = "configs/command_configs"
-		err := commandRun(cmd)
-		if err != nil {
-			log.Fatal(err.Error())
+		cfg.Command = strings.ToLower(cfg.Command)
+		if cfg.Exec != "" { // User sent a complete command
+			fullCmd := strings.Split(cfg.Exec, " ")
+			if !CommandExists(fullCmd[0]) {
+				crashLog(fmt.Sprintf("Command %s does not exist", fullCmd[0]))
+			}
+			cmd := exec.Command(fullCmd[0], fullCmd[1:]...)
+			cmd.Dir = "configs/command_configs"
+			err := commandRun(cmd)
+			if err != nil {
+				crashLog(err.Error())
+			}
+			fmt.Println("delay of ", cfg.Delay, " seconds")
+			time.Sleep(time.Duration(cfg.Delay) * time.Second)
+		} else if cfg.Command != "" { // user sent a wrapped command
+			fullCmd := strings.Split(cfg.Command, " ")
+			execWrapper(fullCmd, cfg)
+			fmt.Println("delay of ", cfg.Delay, " seconds")
+			time.Sleep(time.Duration(cfg.Delay) * time.Second)
+		} else {
+			crashLog("Invalid Command/Exec")
 		}
-		fmt.Println("delay of ", cfg.Delay, " seconds")
-		time.Sleep(time.Duration(cfg.Delay) * time.Second)
 	}
 }
 
@@ -149,7 +216,7 @@ func KwokctlCreate() {
 	err := commandRun(cmd)
 	if err != nil {
 		KwokctlDelete()
-		log.Fatal(err.Error())
+		crashLog(err.Error())
 	}
 }
 
@@ -159,7 +226,7 @@ func KwokctlDelete() {
 	cmd := exec.Command("kwokctl", args...)
 	err := commandCleanRun(cmd)
 	if err != nil {
-		log.Fatal(err.Error())
+		return
 	}
 }
 
@@ -169,7 +236,7 @@ func KubectlApply(toApply string) {
 	cmd := exec.Command("kubectl", args...)
 	err := commandRun(cmd)
 	if err != nil {
-		log.Fatal(err.Error())
+		crashLog(err.Error())
 	}
 }
 
@@ -179,11 +246,19 @@ func KubectlDelete(resource string, toDelete string) {
 	cmd := exec.Command("kubectl", args...)
 	err := commandRun(cmd)
 	if err != nil {
-		log.Fatal(err.Error())
+		crashLog(err.Error())
 	}
 }
 
-func NodeCreate(nodes []configs.Node) {
+func NodeCreate(nodes Node) {
+	nodes.Create()
+}
+
+func NodeDelete(nodes Node) {
+	nodes.Delete()
+}
+
+func (nodes Node) Create() {
 	for _, node := range nodes {
 		nodeName := node.GetName()
 		nodeConfName := node.GetConfName()
@@ -192,7 +267,7 @@ func NodeCreate(nodes []configs.Node) {
 
 		input, err := os.ReadFile(nodeConfName)
 		if err != nil {
-			log.Fatalln(err.Error())
+			crashLog(err.Error())
 		}
 
 		for i := range replicas {
@@ -205,7 +280,7 @@ func NodeCreate(nodes []configs.Node) {
 	}
 }
 
-func NodeDelete(nodes []configs.Node) {
+func (nodes Node) Delete() {
 	for _, node := range nodes {
 		nodeName := node.GetName()
 		toDelete := node.GetCount()
@@ -215,6 +290,6 @@ func NodeDelete(nodes []configs.Node) {
 			KubectlDelete("no", nodeName+"-"+strconv.Itoa(currentIndex))
 			currentIndex--
 		}
-		node.SetCurrentIndex(currentIndex)
+		node.SetCurrentIndex(currentIndex + 1)
 	}
 }
