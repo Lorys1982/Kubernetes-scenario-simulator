@@ -32,7 +32,9 @@ func Init() {
 			enc := yaml.NewEncoder(file)
 			err = enc.Encode(configs.Config{
 				ClusterName: "",
-				Scheduler:   "",
+				KwokConfigs: []string{
+					"",
+				},
 				Nodes: []configs.Node{
 					{
 						ConfigName: "example.yaml",
@@ -65,14 +67,16 @@ func Init() {
 				}{},
 				Spec: []configs.CommandsList{
 					{
-						Exec:  "<command>",
-						Delay: 0,
+						Exec:       "<command>",
+						Delay:      0,
+						Concurrent: false,
 					},
 					{
-						Command:  "<wrapper command>",
-						Filename: "",
-						Count:    0,
-						Delay:    0,
+						Command:    "<wrapper command>",
+						Filename:   "",
+						Count:      0,
+						Delay:      0,
+						Concurrent: false,
 					},
 				},
 			})

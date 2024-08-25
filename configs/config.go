@@ -12,19 +12,20 @@ var nodeCurrentReplicasVec []nodeCurrentReplicas
 var commands *Commands
 
 type Config struct {
-	ClusterName string `yaml:"clusterName"`
-	Scheduler   string `yaml:"schedulerConfig"`
-	Nodes       []Node `yaml:"nodes"`
-	Audit       string `yaml:"auditLoggingConfig"`
-	Commands    string `yaml:"commandsConfig"`
+	ClusterName string   `yaml:"clusterName"`
+	KwokConfigs []string `yaml:"kwokConfigs"`
+	Nodes       []Node   `yaml:"nodes"`
+	Audit       string   `yaml:"auditLoggingConfig"`
+	Commands    string   `yaml:"commandsConfig"`
 }
 
 type CommandsList struct {
-	Exec     string  `yaml:"exec"`
-	Delay    float32 `yaml:"delay"`
-	Command  string  `yaml:"command"`
-	Filename string  `yaml:"filename"`
-	Count    int     `yaml:"count"`
+	Exec       string  `yaml:"exec"`
+	Delay      float32 `yaml:"delay"`
+	Command    string  `yaml:"command"`
+	Filename   string  `yaml:"filename"`
+	Count      int     `yaml:"count"`
+	Concurrent bool    `yaml:"concurrent"`
 }
 
 type Commands struct {
@@ -103,8 +104,8 @@ func GetClusterName() string {
 	return conf.ClusterName
 }
 
-func GetSchedulerConf() string {
-	return conf.Scheduler
+func GetKwokConf() []string {
+	return conf.KwokConfigs
 }
 
 func GetNodesConf() []Node {
@@ -124,8 +125,8 @@ func GetCommandsList() []CommandsList {
 }
 
 func fixFilePath() {
-	if conf.Scheduler != "" {
-		conf.Scheduler = path.Join("configs", "topology", conf.Scheduler)
+	for i, kconf := range conf.KwokConfigs {
+		conf.KwokConfigs[i] = path.Join("configs", "topology", kconf)
 	}
 	if conf.Audit != "" {
 		conf.Audit = path.Join("configs", "topology", conf.Audit)

@@ -7,10 +7,15 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 )
+
+var fileMutex sync.Mutex
 
 // fileReplace Func to replace strings inside of files
 func fileReplace(fileName string, toReplace string, replace string, input ...byte) {
+	fileMutex.Lock()
+	defer fileMutex.Unlock()
 	if len(input) == 0 {
 		var err error
 		input, err = os.ReadFile(fileName)
@@ -34,6 +39,8 @@ func fileReplace(fileName string, toReplace string, replace string, input ...byt
 //
 // The compressed file will be a .gz
 func Compress(fileName string, filepath string) {
+	fileMutex.Lock()
+	defer fileMutex.Unlock()
 	workingDir, _ := os.Getwd()
 
 	inFile := path.Join(filepath, fileName)
