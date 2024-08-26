@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"log"
@@ -14,29 +15,27 @@ import (
 	"time"
 )
 
-var logMutex sync.Mutex
 var nodeMutex sync.Mutex
+var logMutex sync.Mutex
 
 type Node []configs.Node
 type Operations interface {
-	Create()
-	Delete()
+	Create(float32, int)
+	Delete(float32, int)
 }
 
 func crashLog(err string) {
 	KwokctlDelete()
-	logMutex.Lock()
-	defer logMutex.Unlock()
-	errLog, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	errLog.WriteString("Unexpected error: " + err)
+	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	errLog := log.New(errFile, "[Fatal Error] ", log.Ltime|log.Lmicroseconds)
+	errLog.Println(err)
 	log.Fatal(err)
 }
-func errLog(err string) {
-	logMutex.Lock()
-	defer logMutex.Unlock()
-	errLog, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	errLog.WriteString("Error: " + err + "\n\n")
-	log.Println(err)
+
+func errLog(err string, cmd string) {
+	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	errLog := log.New(errFile, "[Error] ", log.Ltime|log.Lmicroseconds)
+	errLog.Printf("(Command: %s) %s\n\n", cmd, err)
 }
 
 func CommandExists(command string) bool {
@@ -44,98 +43,98 @@ func CommandExists(command string) bool {
 	return err == nil
 }
 
-func concurrentCommandRun(cmd *exec.Cmd, cfg configs.CommandsList, wg *sync.WaitGroup) {
+func concurrentCommandRun(cmd *exec.Cmd, cfg configs.CommandsList, wg *sync.WaitGroup, cmdSeq int) {
 	defer wg.Done()
-	_ = commandRun(cmd)
+	_ = commandRun(cmd, cfg.Delay, cmdSeq)
 	time.Sleep(time.Duration(cfg.Delay) * time.Second)
 
 }
 
-func concurrentCommandCleanRun(cmd *exec.Cmd, cfg configs.CommandsList, wg *sync.WaitGroup) {
+func concurrentCommandCleanRun(cmd *exec.Cmd, cfg configs.CommandsList, wg *sync.WaitGroup, cmdSeq int) {
 	defer wg.Done()
-	_ = commandCleanRun(cmd)
+	_ = commandCleanRun(cmd, cfg.Delay, cmdSeq)
 	time.Sleep(time.Duration(cfg.Delay) * time.Second)
 }
 
-// TODO create the logs directory
-func commandRun(cmd *exec.Cmd) error {
-	logMutex.Lock()
-	defer logMutex.Unlock()
-	outLog, err := os.OpenFile(fmt.Sprintf("logs/%s_StdOut.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	errLog, err := os.OpenFile(fmt.Sprintf("logs/%s_StdErr.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	defer outLog.Close()
-	defer errLog.Close()
+func commandRun(cmd *exec.Cmd, delay float32, cmdSeq ...int) error {
+	if len(cmdSeq) == 0 {
+		cmdSeq = []int{0}
+	}
+	outFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdOut.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	stdBuff := bufio.NewWriter(outFile)
+	errBuff := bufio.NewWriter(errFile)
+	defer outFile.Close()
+	defer errFile.Close()
+	outLog := log.New(stdBuff, fmt.Sprintf("[Command #%d Start] ", cmdSeq[0]), log.Ltime|log.Lmicroseconds)
+	errLog := log.New(errBuff, fmt.Sprintf("[Command #%d Start] ", cmdSeq[0]), log.Ltime|log.Lmicroseconds)
 	commandString := strings.Join(cmd.Args, " ")
 
-	_, err = outLog.WriteString("Command: " + commandString + "\n")
-	if err != nil {
-		crashLog(err.Error())
-	}
-	_, err = errLog.WriteString("Command: " + commandString + "\n")
-	if err != nil {
-		crashLog(err.Error())
-	}
+	outLog.Println(commandString)
+	errLog.Println(commandString)
 
-	cmd.Stdout = io.MultiWriter(os.Stdout, outLog)
-	cmd.Stderr = io.MultiWriter(os.Stderr, errLog)
+	cmd.Stdout = io.MultiWriter(os.Stdout, stdBuff)
+	cmd.Stderr = io.MultiWriter(os.Stderr, errBuff)
 
 	_ = cmd.Start()
 	cmdErr := cmd.Wait()
 
-	_, err = outLog.WriteString("\n")
-	if err != nil {
-		crashLog(err.Error())
-	}
-	_, err = errLog.WriteString("\n")
-	if err != nil {
-		crashLog(err.Error())
-	}
+	outLog.SetPrefix(fmt.Sprintf("[Command #%d End] ", cmdSeq[0]))
+	errLog.SetPrefix(fmt.Sprintf("[Command #%d End] ", cmdSeq[0]))
+	outLog.Printf("Delay: %f Seconds\n\n", delay)
+	errLog.Printf("Delay: %f Seconds\n\n", delay)
+
+	logMutex.Lock()
+	stdBuff.Flush()
+	errBuff.Flush()
+	logMutex.Unlock()
+
 	return cmdErr
 }
 
-// TODO create the logs directory
-func commandCleanRun(cmd *exec.Cmd) error {
-	logMutex.Lock()
-	defer logMutex.Unlock()
-	outLog, err := os.OpenFile(fmt.Sprintf("logs/%s_StdOut.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	errLog, err := os.OpenFile(fmt.Sprintf("logs/%s_StdErr.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	defer outLog.Close()
-	defer errLog.Close()
+func commandCleanRun(cmd *exec.Cmd, delay float32, cmdSeq ...int) error {
+	if len(cmdSeq) == 0 {
+		cmdSeq = []int{0}
+	}
+	outFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdOut.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	stdBuff := bufio.NewWriter(outFile)
+	errBuff := bufio.NewWriter(errFile)
+	defer outFile.Close()
+	defer errFile.Close()
+	outLog := log.New(stdBuff, fmt.Sprintf("[Command #%d Start] ", cmdSeq[0]), log.Ltime|log.Lmicroseconds)
+	errLog := log.New(errBuff, fmt.Sprintf("[Command #%d Start] ", cmdSeq[0]), log.Ltime|log.Lmicroseconds)
 	commandString := strings.Join(cmd.Args, " ")
 
-	_, err = outLog.WriteString("Command: " + commandString + "\n")
-	if err != nil {
-		crashLog(err.Error())
-	}
-	_, err = errLog.WriteString("Command: " + commandString + "\n")
-	if err != nil {
-		crashLog(err.Error())
-	}
+	outLog.Println(commandString)
+	errLog.Println(commandString)
 
-	cmd.Stdout = outLog
-	cmd.Stderr = errLog
+	cmd.Stdout = stdBuff
+	cmd.Stderr = errBuff
 
 	_ = cmd.Start()
 	cmdErr := cmd.Wait()
 
-	_, err = outLog.WriteString("\n")
-	if err != nil {
-		crashLog(err.Error())
-	}
-	_, err = errLog.WriteString("\n")
-	if err != nil {
-		crashLog(err.Error())
-	}
+	outLog.SetPrefix(fmt.Sprintf("[Command #%d End] ", cmdSeq[0]))
+	errLog.SetPrefix(fmt.Sprintf("[Command #%d End] ", cmdSeq[0]))
+	outLog.Printf("Delay: %f Seconds\n\n", delay)
+	errLog.Printf("Delay: %f Seconds\n\n", delay)
+
+	logMutex.Lock()
+	stdBuff.Flush()
+	errBuff.Flush()
+	logMutex.Unlock()
+
 	return cmdErr
 }
 
-func concurrentExecWrapper(fullCmd []string, cfg configs.CommandsList, wg *sync.WaitGroup) {
+func concurrentExecWrapper(fullCmd []string, cfg configs.CommandsList, wg *sync.WaitGroup, cmdSeq int) {
 	defer wg.Done()
-	execWrapper(fullCmd, cfg)
+	execWrapper(fullCmd, cfg, cmdSeq)
 	time.Sleep(time.Duration(cfg.Delay) * time.Second)
 }
 
-func execWrapper(fullCmd []string, cfg configs.CommandsList) {
+func execWrapper(fullCmd []string, cfg configs.CommandsList, cmdSeq int) {
 	action := -1
 	var object Operations
 
@@ -165,10 +164,10 @@ func execWrapper(fullCmd []string, cfg configs.CommandsList) {
 
 	switch action {
 	case 1:
-		object.Create()
+		object.Create(cfg.Delay, cmdSeq)
 		break
 	case 0:
-		object.Delete()
+		object.Delete(cfg.Delay, cmdSeq)
 		break
 	default:
 		crashLog("No action was provided")
@@ -177,9 +176,9 @@ func execWrapper(fullCmd []string, cfg configs.CommandsList) {
 
 func SequentialCommandRun(cmds []configs.CommandsList) {
 	var wg sync.WaitGroup
-	for _, cfg := range cmds {
+	for cmdSeq, cfg := range cmds {
 		cfg.Command = strings.ToLower(cfg.Command)
-		if cfg.Concurrent {
+		if cfg.Concurrent { // The command to run is to be run on a thread
 			wg.Add(1)
 			if cfg.Exec != "" { // User sent a complete command
 				fullCmd := strings.Split(cfg.Exec, " ")
@@ -188,15 +187,15 @@ func SequentialCommandRun(cmds []configs.CommandsList) {
 				}
 				cmd := exec.Command(fullCmd[0], fullCmd[1:]...)
 				cmd.Dir = "configs/command_configs"
-				go concurrentCommandRun(cmd, cfg, &wg)
+				go concurrentCommandRun(cmd, cfg, &wg, cmdSeq+1)
 			} else if cfg.Command != "" { // user sent a wrapped command
 				fullCmd := strings.Split(cfg.Command, " ")
-				go concurrentExecWrapper(fullCmd, cfg, &wg)
+				go concurrentExecWrapper(fullCmd, cfg, &wg, cmdSeq+1)
 			} else {
 				wg.Done()
 				crashLog("Invalid Command/Exec")
 			}
-		} else {
+		} else { // the command to run is to be run sequentially
 			wg.Wait()
 			if cfg.Exec != "" { // User sent a complete command
 				fullCmd := strings.Split(cfg.Exec, " ")
@@ -205,12 +204,12 @@ func SequentialCommandRun(cmds []configs.CommandsList) {
 				}
 				cmd := exec.Command(fullCmd[0], fullCmd[1:]...)
 				cmd.Dir = "configs/command_configs"
-				_ = commandRun(cmd)
+				_ = commandRun(cmd, cfg.Delay, cmdSeq+1)
 				fmt.Println("delay of ", cfg.Delay, " seconds")
 				time.Sleep(time.Duration(cfg.Delay) * time.Second)
 			} else if cfg.Command != "" { // user sent a wrapped command
 				fullCmd := strings.Split(cfg.Command, " ")
-				execWrapper(fullCmd, cfg)
+				execWrapper(fullCmd, cfg, cmdSeq+1)
 				fmt.Println("delay of ", cfg.Delay, " seconds")
 				time.Sleep(time.Duration(cfg.Delay) * time.Second)
 			} else {
@@ -255,7 +254,7 @@ func KwokctlCreate() {
 	args := clusterArgs(true)
 
 	cmd := exec.Command("kwokctl", args...)
-	err := commandRun(cmd)
+	err := commandRun(cmd, 0)
 	if err != nil {
 		KwokctlDelete()
 		crashLog(err.Error())
@@ -266,36 +265,36 @@ func KwokctlDelete() {
 	args := clusterArgs(false)
 
 	cmd := exec.Command("kwokctl", args...)
-	err := commandCleanRun(cmd)
+	err := commandCleanRun(cmd, 0)
 	if err != nil {
 		return
 	}
 }
 
-func KubectlApply(toApply string) {
+func KubectlApply(toApply string, delay float32, cmdSeq int) {
 	args := []string{"apply", "-f", toApply}
 
 	cmd := exec.Command("kubectl", args...)
-	_ = commandRun(cmd)
+	_ = commandRun(cmd, delay, cmdSeq)
 }
 
-func KubectlDelete(resource string, toDelete string) {
+func KubectlDelete(resource string, toDelete string, delay float32, cmdSeq int) {
 	args := []string{"delete", resource, toDelete}
 
 	cmd := exec.Command("kubectl", args...)
-	_ = commandRun(cmd)
+	_ = commandRun(cmd, delay, cmdSeq)
 
 }
 
 func NodeCreate(nodes Node) {
-	nodes.Create()
+	nodes.Create(0, 0)
 }
 
 func NodeDelete(nodes Node) {
-	nodes.Delete()
+	nodes.Delete(0, 0)
 }
 
-func (nodes Node) Create() {
+func (nodes Node) Create(delay float32, cmdSeq int) {
 	for _, node := range nodes {
 		nodeName := node.GetName()
 		nodeConfName := node.GetConfName()
@@ -310,7 +309,7 @@ func (nodes Node) Create() {
 			nodeMutex.Lock()
 			currentIndex := node.GetCurrentIndex()
 			fileReplace(nodeConfName, nodeName, nodeName+"-"+strconv.Itoa(currentIndex), input...)
-			KubectlApply(nodeConfName)
+			KubectlApply(nodeConfName, delay, cmdSeq)
 			node.SetCurrentIndex(currentIndex + 1)
 			nodeMutex.Unlock()
 		}
@@ -319,20 +318,23 @@ func (nodes Node) Create() {
 	}
 }
 
-func (nodes Node) Delete() {
+func (nodes Node) Delete(delay float32, cmdSeq int) {
 	for _, node := range nodes {
 		nodeName := node.GetName()
 		toDelete := node.GetCount()
+		initialIndex := node.GetCurrentIndex()
 
 		for range toDelete {
 			nodeMutex.Lock()
 			currentIndex := node.GetCurrentIndex() - 1
 			if currentIndex == -1 {
 				nodeMutex.Unlock()
-				errLog(fmt.Sprintf("Nodes \"%s\" are all already deleted", nodeName))
+				errLog(fmt.Sprintf("Nodes file: \"%s\"| Nodes name: \"%s\" | Set to delete (count): %d | Deletable: %d",
+					node.GetConfName(), nodeName, toDelete, initialIndex),
+					"Delete Node")
 				break
 			}
-			KubectlDelete("no", nodeName+"-"+strconv.Itoa(currentIndex))
+			KubectlDelete("no", nodeName+"-"+strconv.Itoa(currentIndex), delay, cmdSeq)
 			currentIndex--
 			node.SetCurrentIndex(currentIndex + 1)
 			nodeMutex.Unlock()
