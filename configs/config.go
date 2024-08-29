@@ -5,11 +5,13 @@ import (
 	"log"
 	"os"
 	"path"
+	"time"
 )
 
 var conf *Config
 var nodeCurrentReplicasVec []nodeCurrentReplicas
 var commands *Commands
+var LogTime = time.Now().Format("2006-01-02_15:04:05")
 
 type Config struct {
 	ClusterName string   `yaml:"clusterName"`
@@ -20,12 +22,12 @@ type Config struct {
 }
 
 type CommandsList struct {
-	Exec       string  `yaml:"exec"`
-	Delay      float32 `yaml:"delay"`
-	Command    string  `yaml:"command"`
-	Filename   string  `yaml:"filename"`
-	Count      int     `yaml:"count"`
-	Concurrent bool    `yaml:"concurrent"`
+	Exec     string  `yaml:"exec"`
+	Time     float32 `yaml:"time"`
+	Command  string  `yaml:"command"`
+	Filename string  `yaml:"filename"`
+	Count    int     `yaml:"count"`
+	index    int
 }
 
 type Commands struct {
@@ -124,6 +126,10 @@ func GetCommandsList() []CommandsList {
 	return commands.Spec
 }
 
+func (c CommandsList) GetIndex() int {
+	return c.index
+}
+
 func fixFilePath() {
 	for i, kconf := range conf.KwokConfigs {
 		conf.KwokConfigs[i] = path.Join("configs", "topology", kconf)
@@ -159,5 +165,8 @@ func NewConfig() {
 	err = yaml.Unmarshal(yamlFile, &commands)
 	if err != nil {
 		log.Fatal(err.Error())
+	}
+	for i := range commands.Spec {
+		commands.Spec[i].index = i + 1
 	}
 }

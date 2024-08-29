@@ -67,16 +67,14 @@ func Init() {
 				}{},
 				Spec: []configs.CommandsList{
 					{
-						Exec:       "<command>",
-						Delay:      0,
-						Concurrent: false,
+						Exec: "<command>",
+						Time: 0,
 					},
 					{
-						Command:    "<wrapper command>",
-						Filename:   "",
-						Count:      0,
-						Delay:      0,
-						Concurrent: false,
+						Command:  "<wrapper command>",
+						Filename: "",
+						Count:    0,
+						Time:     0,
 					},
 				},
 			})

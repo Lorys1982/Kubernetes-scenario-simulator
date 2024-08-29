@@ -3,12 +3,14 @@ package utils
 import (
 	"bufio"
 	"fmt"
+	"github.com/goaux/prefixwriter"
 	"io"
 	"log"
 	"main/configs"
 	"os"
 	"os/exec"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,14 +28,14 @@ type Operations interface {
 
 func crashLog(err string) {
 	KwokctlDelete()
-	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr_%s.log", configs.GetCommandsName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 	errLog := log.New(errFile, "[Fatal Error] ", log.Ltime|log.Lmicroseconds)
 	errLog.Println(err)
 	log.Fatal(err)
 }
 
 func errLog(err string, cmd string) {
-	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr_%s.log", configs.GetCommandsName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 	errLog := log.New(errFile, "[Error] ", log.Ltime|log.Lmicroseconds)
 	errLog.Printf("(Command: %s) %s\n\n", cmd, err)
 }
@@ -43,25 +45,26 @@ func CommandExists(command string) bool {
 	return err == nil
 }
 
-func concurrentCommandRun(cmd *exec.Cmd, cfg configs.CommandsList, wg *sync.WaitGroup, cmdSeq int) {
+func concurrentCommandRun(cmd *exec.Cmd, cfg configs.CommandsList, wg *sync.WaitGroup) {
+	time.Sleep(time.Duration(cfg.Time) * time.Second)
+	log.Printf("Execution at Time: %f\n", cfg.Time)
 	defer wg.Done()
-	_ = commandRun(cmd, cfg.Delay, cmdSeq)
-	time.Sleep(time.Duration(cfg.Delay) * time.Second)
-
+	_ = commandRun(cmd, cfg.Time, cfg.GetIndex())
 }
 
-func concurrentCommandCleanRun(cmd *exec.Cmd, cfg configs.CommandsList, wg *sync.WaitGroup, cmdSeq int) {
+func concurrentCommandCleanRun(cmd *exec.Cmd, cfg configs.CommandsList, wg *sync.WaitGroup) {
+	time.Sleep(time.Duration(cfg.Time) * time.Second)
+	log.Printf("Execution at Time: %f\n", cfg.Time)
 	defer wg.Done()
-	_ = commandCleanRun(cmd, cfg.Delay, cmdSeq)
-	time.Sleep(time.Duration(cfg.Delay) * time.Second)
+	_ = commandCleanRun(cmd, cfg.Time, cfg.GetIndex())
 }
 
-func commandRun(cmd *exec.Cmd, delay float32, cmdSeq ...int) error {
+func commandRun(cmd *exec.Cmd, time float32, cmdSeq ...int) error {
 	if len(cmdSeq) == 0 {
 		cmdSeq = []int{0}
 	}
-	outFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdOut.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	outFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdOut_%s.log", configs.GetCommandsName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr_%s.log", configs.GetCommandsName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 	stdBuff := bufio.NewWriter(outFile)
 	errBuff := bufio.NewWriter(errFile)
 	defer outFile.Close()
@@ -73,16 +76,19 @@ func commandRun(cmd *exec.Cmd, delay float32, cmdSeq ...int) error {
 	outLog.Println(commandString)
 	errLog.Println(commandString)
 
-	cmd.Stdout = io.MultiWriter(os.Stdout, stdBuff)
-	cmd.Stderr = io.MultiWriter(os.Stderr, errBuff)
+	stdPrefix := prefixwriter.New(stdBuff, []byte(fmt.Sprintf("[Command #%d] ", cmdSeq[0])))
+	errPrefix := prefixwriter.New(errBuff, []byte(fmt.Sprintf("[Command #%d] ", cmdSeq[0])))
+
+	cmd.Stdout = io.MultiWriter(os.Stdout, stdPrefix)
+	cmd.Stderr = io.MultiWriter(os.Stderr, errPrefix)
 
 	_ = cmd.Start()
 	cmdErr := cmd.Wait()
 
 	outLog.SetPrefix(fmt.Sprintf("[Command #%d End] ", cmdSeq[0]))
 	errLog.SetPrefix(fmt.Sprintf("[Command #%d End] ", cmdSeq[0]))
-	outLog.Printf("Delay: %f Seconds\n\n", delay)
-	errLog.Printf("Delay: %f Seconds\n\n", delay)
+	outLog.Printf("Executed at Time: %f Seconds\n\n", time)
+	errLog.Printf("Executed at Time: %f Seconds\n\n", time)
 
 	logMutex.Lock()
 	stdBuff.Flush()
@@ -92,12 +98,12 @@ func commandRun(cmd *exec.Cmd, delay float32, cmdSeq ...int) error {
 	return cmdErr
 }
 
-func commandCleanRun(cmd *exec.Cmd, delay float32, cmdSeq ...int) error {
+func commandCleanRun(cmd *exec.Cmd, time float32, cmdSeq ...int) error {
 	if len(cmdSeq) == 0 {
 		cmdSeq = []int{0}
 	}
-	outFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdOut.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr.log", configs.GetCommandsName()), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	outFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdOut_%s.log", configs.GetCommandsName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr_%s.log", configs.GetCommandsName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 	stdBuff := bufio.NewWriter(outFile)
 	errBuff := bufio.NewWriter(errFile)
 	defer outFile.Close()
@@ -109,16 +115,18 @@ func commandCleanRun(cmd *exec.Cmd, delay float32, cmdSeq ...int) error {
 	outLog.Println(commandString)
 	errLog.Println(commandString)
 
-	cmd.Stdout = stdBuff
-	cmd.Stderr = errBuff
+	stdPrefix := prefixwriter.New(stdBuff, []byte(fmt.Sprintf("[Command #%d] ", cmdSeq[0])))
+	errPrefix := prefixwriter.New(errBuff, []byte(fmt.Sprintf("[Command #%d] ", cmdSeq[0])))
+	cmd.Stdout = stdPrefix
+	cmd.Stderr = errPrefix
 
 	_ = cmd.Start()
 	cmdErr := cmd.Wait()
 
 	outLog.SetPrefix(fmt.Sprintf("[Command #%d End] ", cmdSeq[0]))
 	errLog.SetPrefix(fmt.Sprintf("[Command #%d End] ", cmdSeq[0]))
-	outLog.Printf("Delay: %f Seconds\n\n", delay)
-	errLog.Printf("Delay: %f Seconds\n\n", delay)
+	outLog.Printf("Executed at Time: %f Seconds\n\n", time)
+	errLog.Printf("Executed at Time: %f Seconds\n\n", time)
 
 	logMutex.Lock()
 	stdBuff.Flush()
@@ -128,46 +136,44 @@ func commandCleanRun(cmd *exec.Cmd, delay float32, cmdSeq ...int) error {
 	return cmdErr
 }
 
-func concurrentExecWrapper(fullCmd []string, cfg configs.CommandsList, wg *sync.WaitGroup, cmdSeq int) {
+func concurrentExecWrapper(fullCmd []string, cfg configs.CommandsList, wg *sync.WaitGroup) {
+	time.Sleep(time.Duration(cfg.Time) * time.Second)
+	log.Printf("Execution at Time: %f\n", cfg.Time)
 	defer wg.Done()
-	execWrapper(fullCmd, cfg, cmdSeq)
-	time.Sleep(time.Duration(cfg.Delay) * time.Second)
+	execWrapper(fullCmd, cfg)
 }
 
-func execWrapper(fullCmd []string, cfg configs.CommandsList, cmdSeq int) {
-	action := -1
+func execWrapper(fullCmd []string, cfg configs.CommandsList) {
 	var object Operations
+	resource := fullCmd[0]
+	action := fullCmd[1]
+	//params := fullCmd[2:]
 
-	for _, cmd := range fullCmd {
-		switch cmd {
-		case "create":
-			action = 1
-			break
-		case "delete":
-			action = 0
-			break
-		case "node":
-			object = Node{
-				{
-					ConfigName: path.Join("configs/command_configs", cfg.Filename),
-					Count:      cfg.Count,
-				},
-			}
-			break
-		default:
-			crashLog(fmt.Sprintf("Command %s does not exist", cmd))
+	// Resource switch
+	switch resource {
+	case "node":
+		object = Node{
+			{
+				ConfigName: path.Join("configs/command_configs", cfg.Filename),
+				Count:      cfg.Count,
+			},
 		}
+		break
+	default:
+		crashLog(fmt.Sprintf("Resource %s does not exist", fullCmd[0]))
 	}
+
 	if object == nil {
 		crashLog("No object provided")
 	}
 
+	// Action switch
 	switch action {
-	case 1:
-		object.Create(cfg.Delay, cmdSeq)
+	case "create":
+		object.Create(cfg.Time, cfg.GetIndex())
 		break
-	case 0:
-		object.Delete(cfg.Delay, cmdSeq)
+	case "delete":
+		object.Delete(cfg.Time, cfg.GetIndex())
 		break
 	default:
 		crashLog("No action was provided")
@@ -176,47 +182,29 @@ func execWrapper(fullCmd []string, cfg configs.CommandsList, cmdSeq int) {
 
 func SequentialCommandRun(cmds []configs.CommandsList) {
 	var wg sync.WaitGroup
-	for cmdSeq, cfg := range cmds {
+	sort.Slice(cmds, func(i, j int) bool {
+		return cmds[j].Time > cmds[i].Time
+	})
+	for _, cfg := range cmds {
 		cfg.Command = strings.ToLower(cfg.Command)
-		if cfg.Concurrent { // The command to run is to be run on a thread
-			wg.Add(1)
-			if cfg.Exec != "" { // User sent a complete command
-				fullCmd := strings.Split(cfg.Exec, " ")
-				if !CommandExists(fullCmd[0]) {
-					crashLog(fmt.Sprintf("Command %s does not exist", fullCmd[0]))
-				}
-				cmd := exec.Command(fullCmd[0], fullCmd[1:]...)
-				cmd.Dir = "configs/command_configs"
-				go concurrentCommandRun(cmd, cfg, &wg, cmdSeq+1)
-			} else if cfg.Command != "" { // user sent a wrapped command
-				fullCmd := strings.Split(cfg.Command, " ")
-				go concurrentExecWrapper(fullCmd, cfg, &wg, cmdSeq+1)
-			} else {
-				wg.Done()
-				crashLog("Invalid Command/Exec")
+		wg.Add(1)
+		if cfg.Exec != "" { // User sent a complete command
+			fullCmd := strings.Split(cfg.Exec, " ")
+			if !CommandExists(fullCmd[0]) {
+				crashLog(fmt.Sprintf("Command %s does not exist", fullCmd[0]))
 			}
-		} else { // the command to run is to be run sequentially
-			wg.Wait()
-			if cfg.Exec != "" { // User sent a complete command
-				fullCmd := strings.Split(cfg.Exec, " ")
-				if !CommandExists(fullCmd[0]) {
-					crashLog(fmt.Sprintf("Command %s does not exist", fullCmd[0]))
-				}
-				cmd := exec.Command(fullCmd[0], fullCmd[1:]...)
-				cmd.Dir = "configs/command_configs"
-				_ = commandRun(cmd, cfg.Delay, cmdSeq+1)
-				fmt.Println("delay of ", cfg.Delay, " seconds")
-				time.Sleep(time.Duration(cfg.Delay) * time.Second)
-			} else if cfg.Command != "" { // user sent a wrapped command
-				fullCmd := strings.Split(cfg.Command, " ")
-				execWrapper(fullCmd, cfg, cmdSeq+1)
-				fmt.Println("delay of ", cfg.Delay, " seconds")
-				time.Sleep(time.Duration(cfg.Delay) * time.Second)
-			} else {
-				crashLog("Invalid Command/Exec")
-			}
+			cmd := exec.Command(fullCmd[0], fullCmd[1:]...)
+			cmd.Dir = "configs/command_configs"
+			go concurrentCommandRun(cmd, cfg, &wg)
+		} else if cfg.Command != "" { // user sent a wrapped command
+			fullCmd := strings.Split(cfg.Command, " ")
+			go concurrentExecWrapper(fullCmd, cfg, &wg)
+		} else {
+			wg.Done()
+			crashLog("Invalid Command/Exec")
 		}
 	}
+	wg.Wait()
 }
 
 // clusterArgs function generates args for kwokctl create and kwokctl delete based on given configuration files
@@ -271,18 +259,18 @@ func KwokctlDelete() {
 	}
 }
 
-func KubectlApply(toApply string, delay float32, cmdSeq int) {
+func KubectlApply(toApply string, time float32, cmdSeq int) {
 	args := []string{"apply", "-f", toApply}
 
 	cmd := exec.Command("kubectl", args...)
-	_ = commandRun(cmd, delay, cmdSeq)
+	_ = commandRun(cmd, time, cmdSeq)
 }
 
-func KubectlDelete(resource string, toDelete string, delay float32, cmdSeq int) {
+func KubectlDelete(resource string, toDelete string, time float32, cmdSeq int) {
 	args := []string{"delete", resource, toDelete}
 
 	cmd := exec.Command("kubectl", args...)
-	_ = commandRun(cmd, delay, cmdSeq)
+	_ = commandRun(cmd, time, cmdSeq)
 
 }
 
@@ -294,7 +282,7 @@ func NodeDelete(nodes Node) {
 	nodes.Delete(0, 0)
 }
 
-func (nodes Node) Create(delay float32, cmdSeq int) {
+func (nodes Node) Create(time float32, cmdSeq int) {
 	for _, node := range nodes {
 		nodeName := node.GetName()
 		nodeConfName := node.GetConfName()
@@ -309,7 +297,7 @@ func (nodes Node) Create(delay float32, cmdSeq int) {
 			nodeMutex.Lock()
 			currentIndex := node.GetCurrentIndex()
 			fileReplace(nodeConfName, nodeName, nodeName+"-"+strconv.Itoa(currentIndex), input...)
-			KubectlApply(nodeConfName, delay, cmdSeq)
+			KubectlApply(nodeConfName, time, cmdSeq)
 			node.SetCurrentIndex(currentIndex + 1)
 			nodeMutex.Unlock()
 		}
@@ -318,7 +306,7 @@ func (nodes Node) Create(delay float32, cmdSeq int) {
 	}
 }
 
-func (nodes Node) Delete(delay float32, cmdSeq int) {
+func (nodes Node) Delete(time float32, cmdSeq int) {
 	for _, node := range nodes {
 		nodeName := node.GetName()
 		toDelete := node.GetCount()
@@ -329,12 +317,12 @@ func (nodes Node) Delete(delay float32, cmdSeq int) {
 			currentIndex := node.GetCurrentIndex() - 1
 			if currentIndex == -1 {
 				nodeMutex.Unlock()
-				errLog(fmt.Sprintf("Nodes file: \"%s\"| Nodes name: \"%s\" | Set to delete (count): %d | Deletable: %d",
+				errLog(fmt.Sprintf("Nodes file: \"%s\" | Nodes name: \"%s\" | Set to delete (count): %d | Deletable: %d",
 					node.GetConfName(), nodeName, toDelete, initialIndex),
 					"Delete Node")
 				break
 			}
-			KubectlDelete("no", nodeName+"-"+strconv.Itoa(currentIndex), delay, cmdSeq)
+			KubectlDelete("no", nodeName+"-"+strconv.Itoa(currentIndex), time, cmdSeq)
 			currentIndex--
 			node.SetCurrentIndex(currentIndex + 1)
 			nodeMutex.Unlock()
