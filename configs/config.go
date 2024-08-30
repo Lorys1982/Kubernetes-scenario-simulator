@@ -10,8 +10,9 @@ import (
 
 var conf *Config
 var nodeCurrentReplicasVec []nodeCurrentReplicas
-var commands *Commands
+var commandsConf *CommandsConf
 var LogTime = time.Now().Format("2006-01-02_15:04:05")
+var StartTime time.Time
 
 type Config struct {
 	ClusterName string   `yaml:"clusterName"`
@@ -21,22 +22,31 @@ type Config struct {
 	Commands    string   `yaml:"commandsConfig"`
 }
 
-type CommandsList struct {
+type Command struct {
 	Exec     string  `yaml:"exec"`
-	Time     float32 `yaml:"time"`
+	Time     float64 `yaml:"time"`
 	Command  string  `yaml:"command"`
 	Filename string  `yaml:"filename"`
 	Count    int     `yaml:"count"`
 	index    int
 }
 
-type Commands struct {
+type Queue struct {
+	Name       string    `yaml:"name"`
+	Kubeconfig string    `yaml:"kubeconfig"`
+	Sequence   []Command `yaml:"sequence"`
+}
+
+type CommandsConf struct {
 	Kind       string `yaml:"kind"`
 	ApiVersion string `yaml:"apiVersion"`
 	Metadata   struct {
 		Name string `yaml:"name"`
 	} `yaml:"metadata"`
-	Spec []CommandsList `yaml:"spec"`
+	Spec struct {
+		Aliases []string `yaml:"aliases"`
+		Queues  []Queue  `yaml:"queues"`
+	}
 }
 
 type nodeInfo struct {
@@ -118,15 +128,19 @@ func GetAuditConf() string {
 	return conf.Audit
 }
 
-func GetCommandsName() string {
-	return commands.Metadata.Name
+func GetCommandsConfName() string {
+	return commandsConf.Metadata.Name
 }
 
-func GetCommandsList() []CommandsList {
-	return commands.Spec
+func GetQueues() []Queue {
+	return commandsConf.Spec.Queues
 }
 
-func (c CommandsList) GetIndex() int {
+func (q Queue) IsEmpty() bool {
+	return q.Name == ""
+}
+
+func (c Command) GetIndex() int {
 	return c.index
 }
 
@@ -162,11 +176,13 @@ func NewConfig() {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	err = yaml.Unmarshal(yamlFile, &commands)
+	err = yaml.Unmarshal(yamlFile, &commandsConf)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	for i := range commands.Spec {
-		commands.Spec[i].index = i + 1
+	for i := range commandsConf.Spec.Queues {
+		for j := range commandsConf.Spec.Queues[i].Sequence {
+			commandsConf.Spec.Queues[i].Sequence[j].index = j + 1
+		}
 	}
 }

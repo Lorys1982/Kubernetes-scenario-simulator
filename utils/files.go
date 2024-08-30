@@ -45,7 +45,7 @@ func Compress(fileName string, filepath string) {
 
 	inFile := path.Join(filepath, fileName)
 	input, _ := os.ReadFile(inFile)
-	fileName = configs.GetCommandsName() + "_" + configs.LogTime + ".gz"
+	fileName = configs.GetCommandsConfName() + "_" + configs.LogTime + ".gz"
 
 	outFile := path.Join(workingDir, "logs", fileName)
 	newFile, _ := os.Create(outFile)

@@ -27,12 +27,7 @@ func Simulation() {
 	utils.NodeCreate(configs.GetNodesConf())
 
 	// Executes the commands with the specified delay
-	utils.SequentialCommandRun(configs.GetCommandsList())
-
-	// Test multiple node creations
-	utils.NodeCreate(configs.GetNodesConf())
-	// Test multinode deletion
-	utils.NodeDelete(configs.GetNodesConf())
+	utils.ConcurrentQueueRun(configs.GetQueues())
 
 	// Copy and compress log file
 	utils.Compress("audit.log", path.Join(home, ".kwok/clusters", configs.GetClusterName(), "logs"))

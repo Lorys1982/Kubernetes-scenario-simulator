@@ -51,7 +51,7 @@ func Init() {
 		}
 	}
 
-	// Commands config file template creation
+	// CommandsConf config file template creation
 	file, err = os.OpenFile("configs/command_configs/config.yaml", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0664)
 	if !os.IsExist(err) {
 		if err != nil {
@@ -59,22 +59,33 @@ func Init() {
 		} else {
 			defer file.Close()
 			enc := yaml.NewEncoder(file)
-			err = enc.Encode(configs.Commands{
+			err = enc.Encode(configs.CommandsConf{
 				Kind:       "",
 				ApiVersion: "",
 				Metadata: struct {
 					Name string `yaml:"name"`
 				}{},
-				Spec: []configs.CommandsList{
-					{
-						Exec: "<command>",
-						Time: 0,
-					},
-					{
-						Command:  "<wrapper command>",
-						Filename: "",
-						Count:    0,
-						Time:     0,
+				Spec: struct {
+					Aliases []string        `yaml:"aliases"`
+					Queues  []configs.Queue `yaml:"queues"`
+				}{
+					Queues: []configs.Queue{
+						{
+							Name:       "",
+							Kubeconfig: "",
+							Sequence: []configs.Command{
+								{
+									Exec: "<command>",
+									Time: 0,
+								},
+								{
+									Command:  "<wrapper command>",
+									Filename: "",
+									Count:    0,
+									Time:     0,
+								},
+							},
+						},
 					},
 				},
 			})
