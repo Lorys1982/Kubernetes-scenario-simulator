@@ -219,11 +219,17 @@ func ConcurrentCommandsRun(queue configs.Queue, wgQueues *sync.WaitGroup) {
 			if !CommandExists(fullCmd[0]) {
 				crashLog(fmt.Sprintf("Command %s does not exist", fullCmd[0]))
 			}
+			if queue.Kubeconfig != "" {
+				fullCmd = append(fullCmd, "--kubeconfig", queue.Kubeconfig)
+			}
 			cmd := exec.Command(fullCmd[0], fullCmd[1:]...)
 			cmd.Dir = "configs/command_configs"
 			go concurrentCommandRun(cmd, cfg, &wgCommands, queue)
 		} else if cfg.Command != "" { // user sent a wrapped command
 			fullCmd := strings.Split(cfg.Command, " ")
+			if queue.Kubeconfig != "" {
+				fullCmd = append(fullCmd, "--kubeconfig", queue.Kubeconfig)
+			}
 			go concurrentExecWrapper(fullCmd, cfg, &wgCommands, queue)
 		} else {
 			crashLog("Invalid Command/Exec")
@@ -293,6 +299,9 @@ func KwokctlDelete() {
 
 func KubectlApply(toApply string, time float64, info commandInfo) {
 	args := []string{"apply", "-f", toApply}
+	if info.Queue.Kubeconfig != "" {
+		args = append(args, "--kubeconfig", info.Queue.Kubeconfig)
+	}
 
 	cmd := exec.Command("kubectl", args...)
 	_ = commandRun(cmd, time, info)
@@ -300,6 +309,9 @@ func KubectlApply(toApply string, time float64, info commandInfo) {
 
 func KubectlDelete(resource string, toDelete string, time float64, info commandInfo) {
 	args := []string{"delete", resource, toDelete}
+	if info.Queue.Kubeconfig != "" {
+		args = append(args, "--kubeconfig", info.Queue.Kubeconfig)
+	}
 
 	cmd := exec.Command("kubectl", args...)
 	_ = commandRun(cmd, time, info)
