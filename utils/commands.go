@@ -429,10 +429,12 @@ func (nodes node) Get(execTime float64, info commandInfo) {
 }
 
 func (k kube) Create(execTime float64, info commandInfo) {
+	k.Args = fixArgs(k.Args)
 	KubectlCreate(k.Filename, execTime, info, k.Args...)
 }
 
 func (k kube) Delete(execTime float64, info commandInfo) {
+	k.Args = fixArgs(k.Args)
 	if k.Filename != "" {
 		k.Args = append([]string{"-f", k.Filename}, k.Args...)
 	}
@@ -440,9 +442,19 @@ func (k kube) Delete(execTime float64, info commandInfo) {
 }
 
 func (k kube) Apply(execTime float64, info commandInfo) {
+	k.Args = fixArgs(k.Args)
 	KubectlApply(k.Filename, execTime, info, k.Args...)
 }
 
 func (k kube) Get(execTime float64, info commandInfo) {
+	k.Args = fixArgs(k.Args)
 	KubectlGet(execTime, info, k.Args...)
+}
+
+func fixArgs(args []string) []string {
+	var rArgs []string
+	for _, arg := range args {
+		rArgs = append(rArgs, strings.Split(arg, " ")...)
+	}
+	return rArgs
 }
