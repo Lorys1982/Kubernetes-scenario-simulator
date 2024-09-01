@@ -20,11 +20,19 @@ import (
 var nodeMutex sync.Mutex
 var logMutex sync.Mutex
 
-type Node []configs.Node
+type kube configs.Kube
+type node []configs.Node
+
+// Operations interface for resources in command put in configs
+//
+// float64 is for time to execute, commandInfo is for whatever info on the command is needed
 type Operations interface {
 	Create(float64, commandInfo)
 	Delete(float64, commandInfo)
+	Apply(float64, commandInfo)
+	Get(float64, commandInfo)
 }
+
 type commandInfo struct {
 	Queue  configs.Queue
 	CmdSeq int
@@ -71,7 +79,7 @@ func concurrentCommandCleanRun(cmd *exec.Cmd, cfg configs.Command, wg *sync.Wait
 	_ = commandCleanRun(cmd, time.Since(configs.StartTime).Seconds(), info)
 }
 
-func commandRun(cmd *exec.Cmd, time float64, info commandInfo) error {
+func commandRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
 	if info.Queue.IsEmpty() {
 		info.Queue.Name = "<None>"
 	}
@@ -100,8 +108,8 @@ func commandRun(cmd *exec.Cmd, time float64, info commandInfo) error {
 
 	outLog.SetPrefix(fmt.Sprintf("[Queue: %s][Command #%d End] ", info.Queue.Name, info.CmdSeq))
 	errLog.SetPrefix(fmt.Sprintf("[Queue: %s][Command #%d End] ", info.Queue.Name, info.CmdSeq))
-	outLog.Printf("Executed at Time: %f Seconds\n\n", time)
-	errLog.Printf("Executed at Time: %f Seconds\n\n", time)
+	outLog.Printf("Executed at Time: %f Seconds\n\n", execTime)
+	errLog.Printf("Executed at Time: %f Seconds\n\n", execTime)
 
 	logMutex.Lock()
 	stdBuff.Flush()
@@ -111,7 +119,7 @@ func commandRun(cmd *exec.Cmd, time float64, info commandInfo) error {
 	return cmdErr
 }
 
-func commandCleanRun(cmd *exec.Cmd, time float64, info commandInfo) error {
+func commandCleanRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
 	if info.Queue.IsEmpty() {
 		info.Queue.Name = "<None>"
 	}
@@ -140,8 +148,8 @@ func commandCleanRun(cmd *exec.Cmd, time float64, info commandInfo) error {
 
 	outLog.SetPrefix(fmt.Sprintf("[Queue: %s][Command #%d End] ", info.Queue.Name, info.CmdSeq))
 	errLog.SetPrefix(fmt.Sprintf("[Queue: %s][Command #%d End] ", info.Queue.Name, info.CmdSeq))
-	outLog.Printf("Executed at Time: %f Seconds\n\n", time)
-	errLog.Printf("Executed at Time: %f Seconds\n\n", time)
+	outLog.Printf("Executed at Time: %f Seconds\n\n", execTime)
+	errLog.Printf("Executed at Time: %f Seconds\n\n", execTime)
 
 	logMutex.Lock()
 	stdBuff.Flush()
@@ -171,13 +179,17 @@ func execWrapper(fullCmd []string, cfg configs.Command, info commandInfo) {
 	// Resource switch
 	switch resource {
 	case "node":
-		object = Node{
+		object = node{
 			{
 				ConfigName: path.Join("configs/command_configs", cfg.Filename),
 				Count:      cfg.Count,
 			},
 		}
-		break
+	case "kube":
+		object = kube{
+			Filename: path.Join("configs/command_configs", cfg.Filename),
+			Args:     cfg.Args,
+		}
 	default:
 		crashLog(fmt.Sprintf("Resource %s does not exist", fullCmd[0]))
 	}
@@ -190,6 +202,10 @@ func execWrapper(fullCmd []string, cfg configs.Command, info commandInfo) {
 	case "delete":
 		object.Delete(time.Since(configs.StartTime).Seconds(), info)
 		break
+	case "get":
+		object.Get(time.Since(configs.StartTime).Seconds(), info)
+	case "apply":
+		object.Apply(time.Since(configs.StartTime).Seconds(), info)
 	default:
 		crashLog("No action was provided")
 	}
@@ -297,42 +313,66 @@ func KwokctlDelete() {
 	}
 }
 
-func KubectlApply(toApply string, time float64, info commandInfo) {
+func KubectlApply(toApply string, execTime float64, info commandInfo, cmdArgs ...string) {
 	args := []string{"apply", "-f", toApply}
+	args = append(args, cmdArgs...)
 	if info.Queue.Kubeconfig != "" {
 		args = append(args, "--kubeconfig", info.Queue.Kubeconfig)
 	}
 
 	cmd := exec.Command("kubectl", args...)
-	_ = commandRun(cmd, time, info)
+	_ = commandRun(cmd, execTime, info)
 }
 
-func KubectlDelete(resource string, toDelete string, time float64, info commandInfo) {
-	args := []string{"delete", resource, toDelete}
+func KubectlCreate(toCreate string, execTime float64, info commandInfo, cmdArgs ...string) {
+	args := []string{"create", "-f", toCreate}
+	args = append(args, cmdArgs...)
 	if info.Queue.Kubeconfig != "" {
 		args = append(args, "--kubeconfig", info.Queue.Kubeconfig)
 	}
 
 	cmd := exec.Command("kubectl", args...)
-	_ = commandRun(cmd, time, info)
+	_ = commandRun(cmd, execTime, info)
+}
+
+func KubectlDelete(execTime float64, info commandInfo, cmdArgs ...string) {
+	args := []string{"delete"}
+	args = append(args, cmdArgs...)
+	if info.Queue.Kubeconfig != "" {
+		args = append(args, "--kubeconfig", info.Queue.Kubeconfig)
+	}
+
+	cmd := exec.Command("kubectl", args...)
+	_ = commandRun(cmd, execTime, info)
 
 }
 
-func NodeCreate(nodes Node) {
+func KubectlGet(execTime float64, info commandInfo, cmdArgs ...string) {
+	args := []string{"get"}
+	args = append(args, cmdArgs...)
+	if info.Queue.Kubeconfig != "" {
+		args = append(args, "--kubeconfig", info.Queue.Kubeconfig)
+	}
+
+	cmd := exec.Command("kubectl", args...)
+	_ = commandRun(cmd, execTime, info)
+}
+
+func NodeCreate(nodes node) {
 	nodes.Create(0, commandInfo{
 		Queue:  configs.Queue{},
 		CmdSeq: 0,
 	})
 }
 
-func NodeDelete(nodes Node) {
+func NodeDelete(nodes node) {
 	nodes.Delete(0, commandInfo{
 		Queue:  configs.Queue{},
 		CmdSeq: 0,
 	})
 }
 
-func (nodes Node) Create(time float64, info commandInfo) {
+func (nodes node) Create(execTime float64, info commandInfo) {
 	for _, node := range nodes {
 		nodeName := node.GetName()
 		nodeConfName := node.GetConfName()
@@ -347,7 +387,7 @@ func (nodes Node) Create(time float64, info commandInfo) {
 			nodeMutex.Lock()
 			currentIndex := node.GetCurrentIndex()
 			fileReplace(nodeConfName, nodeName, nodeName+"-"+strconv.Itoa(currentIndex), input...)
-			KubectlApply(nodeConfName, time, info)
+			KubectlApply(nodeConfName, execTime, info)
 			node.SetCurrentIndex(currentIndex + 1)
 			nodeMutex.Unlock()
 		}
@@ -356,7 +396,7 @@ func (nodes Node) Create(time float64, info commandInfo) {
 	}
 }
 
-func (nodes Node) Delete(time float64, info commandInfo) {
+func (nodes node) Delete(execTime float64, info commandInfo) {
 	for _, node := range nodes {
 		nodeName := node.GetName()
 		toDelete := node.GetCount()
@@ -369,13 +409,40 @@ func (nodes Node) Delete(time float64, info commandInfo) {
 				nodeMutex.Unlock()
 				errLog(fmt.Sprintf("Nodes file: \"%s\" | Nodes name: \"%s\" | Set to delete (count): %d | Deletable: %d",
 					node.GetConfName(), nodeName, toDelete, initialIndex),
-					"Delete Node")
+					"Delete node")
 				break
 			}
-			KubectlDelete("no", nodeName+"-"+strconv.Itoa(currentIndex), time, info)
+			KubectlDelete(execTime, info, []string{"no", nodeName + "-" + strconv.Itoa(currentIndex)}...)
 			currentIndex--
 			node.SetCurrentIndex(currentIndex + 1)
 			nodeMutex.Unlock()
 		}
 	}
+}
+
+func (nodes node) Apply(execTime float64, info commandInfo) {
+	nodes.Create(execTime, info)
+}
+
+func (nodes node) Get(execTime float64, info commandInfo) {
+	KubectlGet(execTime, info, "no")
+}
+
+func (k kube) Create(execTime float64, info commandInfo) {
+	KubectlCreate(k.Filename, execTime, info, k.Args...)
+}
+
+func (k kube) Delete(execTime float64, info commandInfo) {
+	if k.Filename != "" {
+		k.Args = append([]string{"-f", k.Filename}, k.Args...)
+	}
+	KubectlDelete(execTime, info, k.Args...)
+}
+
+func (k kube) Apply(execTime float64, info commandInfo) {
+	KubectlApply(k.Filename, execTime, info, k.Args...)
+}
+
+func (k kube) Get(execTime float64, info commandInfo) {
+	KubectlGet(execTime, info, k.Args...)
 }

@@ -14,6 +14,11 @@ var commandsConf *CommandsConf
 var LogTime = time.Now().Format("2006-01-02_15:04:05")
 var StartTime time.Time
 
+type Kube struct {
+	Filename string
+	Args     []string
+}
+
 type Config struct {
 	ClusterName string   `yaml:"clusterName"`
 	KwokConfigs []string `yaml:"kwokConfigs"`
@@ -23,11 +28,12 @@ type Config struct {
 }
 
 type Command struct {
-	Exec     string  `yaml:"exec"`
-	Time     float64 `yaml:"time"`
-	Command  string  `yaml:"command"`
-	Filename string  `yaml:"filename"`
-	Count    int     `yaml:"count"`
+	Exec     string   `yaml:"exec"`
+	Time     float64  `yaml:"time"`
+	Command  string   `yaml:"command"`
+	Filename string   `yaml:"filename"`
+	Count    int      `yaml:"count"`
+	Args     []string `yaml:"args"`
 	index    int
 }
 
@@ -128,21 +134,15 @@ func GetAuditConf() string {
 	return conf.Audit
 }
 
-func GetCommandsConfName() string {
-	return commandsConf.Metadata.Name
-}
+func GetCommandsConfName() string { return commandsConf.Metadata.Name }
 
 func GetQueues() []Queue {
 	return commandsConf.Spec.Queues
 }
 
-func (q Queue) IsEmpty() bool {
-	return q.Name == ""
-}
+func (q Queue) IsEmpty() bool { return q.Name == "" }
 
-func (c Command) GetIndex() int {
-	return c.index
-}
+func (c Command) GetIndex() int { return c.index }
 
 func fixFilePath() {
 	for i, kconf := range conf.KwokConfigs {

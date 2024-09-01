@@ -23,7 +23,7 @@ func Simulation() {
 	// Cluster Creation
 	utils.KwokctlCreate()
 
-	// Node Creation
+	// node Creation
 	utils.NodeCreate(configs.GetNodesConf())
 
 	// Executes the commands with the specified delay
