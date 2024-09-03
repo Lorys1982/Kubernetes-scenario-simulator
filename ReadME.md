@@ -123,7 +123,7 @@ This configuration manages the cluster's topology, it is used to set up the Kwok
 
 **Location:** `./configs/config.yaml`
 
-**Fields:**
+#### Fields
 - **clusterName [string]:** Name of the kwok cluster, mainly introduced to match the name inside kwok configs
 - **kwokConfigs [string list]:** List of config files (.yaml) applicable to kwok cluster creation 
 - **nodes [nodes list]:** List of nodes, each composed of _name_ and _count_
@@ -146,7 +146,7 @@ from the start of the simulation.
 
 **Location:** `./configs/command_configs/config.yaml` (Note that the config name is **variable**)
 
-#### Fields:
+#### Fields
 - **kind [string]:** #TODO
 - **apiVersion [string]:** #TODO
 - **metadata [metadata list]:** Data about the scenario
@@ -161,11 +161,11 @@ from the start of the simulation.
       - **Exec Format [RAW commands]:** RAW shell commands (Described below)
       - **Command Format [wrapped commands]:** Wrapped commands (Described below)
 
-#### Exec Format:
+#### Exec Format
 - **exec [string]:** Full RAW shell command
 - **time [float]:** Absolute time of execution after the start of the simulation in seconds
 
-#### Command Format:
+#### Command Format
 - **command [string]:** Simulator provided command, will be explained below [(Jump)](#commands)
 - **time [float]:** Absolute time of execution after the start of the simulation in seconds
 - **filename [string]:** If the command requires a file, it can be written here
