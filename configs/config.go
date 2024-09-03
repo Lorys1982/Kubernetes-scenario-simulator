@@ -28,12 +28,12 @@ type Config struct {
 }
 
 type Command struct {
-	Exec     string   `yaml:"exec"`
+	Exec     string   `yaml:"exec,omitempty"`
+	Command  string   `yaml:"command,omitempty"`
 	Time     float64  `yaml:"time"`
-	Command  string   `yaml:"command"`
-	Filename string   `yaml:"filename"`
-	Count    int      `yaml:"count"`
-	Args     []string `yaml:"args"`
+	Filename string   `yaml:"filename,omitempty"`
+	Count    int      `yaml:"count,omitempty"`
+	Args     []string `yaml:"args,omitempty"`
 	index    int
 }
 
@@ -67,7 +67,7 @@ type nodeCurrentReplicas struct {
 }
 
 type Node struct {
-	ConfigName string `yaml:"name"`
+	ConfigName string `yaml:"filename"`
 	Count      int    `yaml:"count"`
 }
 

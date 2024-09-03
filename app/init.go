@@ -42,7 +42,7 @@ func Init() {
 					},
 				},
 				Audit:    "",
-				Commands: "",
+				Commands: "config.yaml",
 			})
 			if err != nil {
 				log.Fatal(err)
@@ -80,9 +80,12 @@ func Init() {
 								},
 								{
 									Command:  "<wrapper command>",
-									Filename: "",
-									Count:    0,
+									Filename: "<filename>",
+									Count:    1,
 									Time:     0,
+									Args: []string{
+										"<args1>",
+									},
 								},
 							},
 						},
