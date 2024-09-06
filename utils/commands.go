@@ -38,20 +38,6 @@ type commandInfo struct {
 	CmdSeq int
 }
 
-func crashLog(err string) {
-	KwokctlDelete()
-	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr_%s.log", configs.GetCommandsConfName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	errLog := log.New(errFile, "[Fatal Error] ", log.Ltime|log.Lmicroseconds)
-	errLog.Println(err)
-	log.Fatal(err)
-}
-
-func errLog(err string, cmd string) {
-	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr_%s.log", configs.GetCommandsConfName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	errLog := log.New(errFile, "[Error] ", log.Ltime|log.Lmicroseconds)
-	errLog.Printf("(Command: %s) %s\n\n", cmd, err)
-}
-
 func CommandExists(command string) bool {
 	_, err := exec.LookPath(command)
 	return err == nil
@@ -373,8 +359,12 @@ func NodeDelete(nodes node) {
 }
 
 func (nodes node) Create(execTime float64, info commandInfo) {
+	var optionInput = &configs.Option[[]byte]{}
 	for _, node := range nodes {
-		nodeName := node.GetName()
+		nodeName, err := node.GetName()
+		if err != nil {
+			crashLog(err.Error())
+		}
 		nodeConfName := node.GetConfName()
 		replicas := node.GetCount()
 
@@ -382,23 +372,27 @@ func (nodes node) Create(execTime float64, info commandInfo) {
 		if err != nil {
 			crashLog(err.Error())
 		}
+		optionInput.Some(input)
 
 		for range replicas {
 			nodeMutex.Lock()
 			currentIndex := node.GetCurrentIndex()
-			fileReplace(nodeConfName, nodeName, nodeName+"-"+strconv.Itoa(currentIndex), input...)
+			fileReplace(nodeConfName, nodeName, nodeName+"-"+strconv.Itoa(currentIndex), *optionInput)
 			KubectlApply(nodeConfName, execTime, info)
 			node.SetCurrentIndex(currentIndex + 1)
 			nodeMutex.Unlock()
 		}
 		// Just restores input (the initial file)
-		fileReplace(nodeConfName, "", "", input...)
+		fileReplace(nodeConfName, "", "", *optionInput)
 	}
 }
 
 func (nodes node) Delete(execTime float64, info commandInfo) {
 	for _, node := range nodes {
-		nodeName := node.GetName()
+		nodeName, err := node.GetName()
+		if err != nil {
+			crashLog(err.Error())
+		}
 		toDelete := node.GetCount()
 		initialIndex := node.GetCurrentIndex()
 
@@ -457,4 +451,13 @@ func fixArgs(args []string) []string {
 		rArgs = append(rArgs, strings.Split(arg, " ")...)
 	}
 	return rArgs
+}
+
+func errLog(err string, s string) {
+	configs.ErrLog(err, s)
+}
+
+func crashLog(err string) {
+	KwokctlDelete()
+	configs.CrashLog(err)
 }

@@ -8,6 +8,11 @@ import (
 	"path"
 )
 
+// Simulation function
+//
+// starts the simulation by creating the fake cluster,
+// running all the commands and deleting it at last, logging everything
+// in the logs folder
 func Simulation() {
 	configs.NewConfig()
 	home, _ := os.UserHomeDir()

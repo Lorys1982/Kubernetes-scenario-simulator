@@ -7,6 +7,9 @@ import (
 	"os"
 )
 
+// Init Function
+//
+// Initialized config files and directories
 func Init() {
 	// Directories Creation
 	err := os.MkdirAll("./logs", os.ModePerm)
