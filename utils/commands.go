@@ -19,6 +19,7 @@ import (
 
 var nodeMutex sync.Mutex
 var logMutex sync.Mutex
+var WastedTime float64 = 0
 
 type kube configs.Kube
 type node []configs.Node
@@ -45,7 +46,10 @@ func CommandExists(command string) bool {
 
 func concurrentCommandRun(cmd *exec.Cmd, cfg configs.Command, wg *sync.WaitGroup, queue configs.Queue) {
 	defer wg.Done()
-	time.Sleep(time.Duration(cfg.Time) * time.Second)
+	//timeDiff := time.Since(configs.StartTime).Seconds()
+	//sleep := time.Duration((cfg.Time - timeDiff) * float64(time.Second))
+	time.Sleep(time.Duration(cfg.Time*float64(time.Second)) * time.Nanosecond) // Faster, but more imprecise for large configs file
+	//time.Sleep(sleep * time.Nanosecond) // more precise for large config files, but slower
 	log.Printf("Execution at Time: %f\n", cfg.Time)
 	info := commandInfo{
 		Queue:  queue,
@@ -56,7 +60,10 @@ func concurrentCommandRun(cmd *exec.Cmd, cfg configs.Command, wg *sync.WaitGroup
 
 func concurrentCommandCleanRun(cmd *exec.Cmd, cfg configs.Command, wg *sync.WaitGroup, queue configs.Queue) {
 	defer wg.Done()
-	time.Sleep(time.Duration(cfg.Time) * time.Second)
+	timeDiff := time.Since(configs.StartTime).Seconds()
+	sleep := time.Duration((cfg.Time - timeDiff) * float64(time.Second))
+	//time.Sleep(time.Duration(cfg.Time*float64(time.Second)) * time.Nanosecond) // Faster, but more imprecise for large configs file
+	time.Sleep(sleep * time.Nanosecond) // more precise for large config files, but slower
 	log.Printf("Execution at Time: %f\n", cfg.Time)
 	info := commandInfo{
 		Queue:  queue,
@@ -147,12 +154,17 @@ func commandCleanRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
 
 func concurrentExecWrapper(fullCmd []string, cfg configs.Command, wg *sync.WaitGroup, queue configs.Queue) {
 	defer wg.Done()
-	time.Sleep(time.Duration(cfg.Time) * time.Second)
-	log.Printf("Execution at Time: %f\n", cfg.Time)
+	//timeDiff := time.Since(configs.StartTime).Seconds()
+	//sleep := time.Duration((cfg.Time - timeDiff) * float64(time.Second))
+	time.Sleep(time.Duration(cfg.Time*float64(time.Second)) * time.Nanosecond) // Faster, but more imprecise for large configs file
+	//time.Sleep(sleep * time.Nanosecond) // More precise for large config files, but slower
+	printTime := time.Since(configs.StartTime).Seconds()
+	log.Printf("Execution at Time: %f\n", printTime)
 	info := commandInfo{
 		Queue:  queue,
 		CmdSeq: cfg.GetIndex(),
 	}
+	WastedTime += printTime - cfg.Time
 	execWrapper(fullCmd, cfg, info)
 }
 

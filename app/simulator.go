@@ -6,6 +6,7 @@ import (
 	"main/utils"
 	"os"
 	"path"
+	"strconv"
 )
 
 // Simulation function
@@ -39,4 +40,7 @@ func Simulation() {
 
 	// Cluster Deletion
 	utils.KwokctlDelete()
+
+	log.Println("Time wasted: ", utils.WastedTime)
+	configs.ErrLog(strconv.FormatFloat(utils.WastedTime, 'f', -1, 64), "<none>")
 }
