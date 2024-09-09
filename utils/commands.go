@@ -3,7 +3,7 @@ package utils
 import (
 	"bufio"
 	"fmt"
-	"github.com/goaux/prefixwriter"
+	"github.com/goaux/decowriter"
 	"io"
 	"log"
 	"main/configs"
@@ -83,8 +83,8 @@ func commandRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
 	outLog.Println(commandString)
 	errLog.Println(commandString)
 
-	stdPrefix := prefixwriter.New(stdBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.Queue.Name, info.CmdSeq)))
-	errPrefix := prefixwriter.New(errBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.Queue.Name, info.CmdSeq)))
+	stdPrefix := decowriter.New(stdBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.Queue.Name, info.CmdSeq)), []byte{})
+	errPrefix := decowriter.New(errBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.Queue.Name, info.CmdSeq)), []byte{})
 
 	cmd.Stdout = io.MultiWriter(os.Stdout, stdPrefix)
 	cmd.Stderr = io.MultiWriter(os.Stderr, errPrefix)
@@ -123,8 +123,8 @@ func commandCleanRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
 	outLog.Println(commandString)
 	errLog.Println(commandString)
 
-	stdPrefix := prefixwriter.New(stdBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.Queue.Name, info.CmdSeq)))
-	errPrefix := prefixwriter.New(errBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.Queue.Name, info.CmdSeq)))
+	stdPrefix := decowriter.New(stdBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.Queue.Name, info.CmdSeq)), []byte{})
+	errPrefix := decowriter.New(errBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.Queue.Name, info.CmdSeq)), []byte{})
 
 	cmd.Stdout = stdPrefix
 	cmd.Stderr = errPrefix
