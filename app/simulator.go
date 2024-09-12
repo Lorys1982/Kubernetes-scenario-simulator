@@ -41,6 +41,7 @@ func Simulation() {
 	// Cluster Deletion
 	utils.KwokctlDelete()
 
-	log.Println("Time wasted: ", utils.WastedTime)
-	configs.ErrLog(strconv.FormatFloat(utils.WastedTime, 'f', -1, 64), "<none>")
+	wt := utils.WastedTime / float64(len(configs.GetQueues()[0].Sequence))
+	log.Println("Mean of Time wasted: ", wt)
+	configs.ErrLog(strconv.FormatFloat(wt, 'f', -1, 64), "<none>")
 }

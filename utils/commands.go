@@ -154,10 +154,10 @@ func commandCleanRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
 
 func concurrentExecWrapper(fullCmd []string, cfg configs.Command, wg *sync.WaitGroup, queue configs.Queue) {
 	defer wg.Done()
-	//timeDiff := time.Since(configs.StartTime).Seconds()
-	//sleep := time.Duration((cfg.Time - timeDiff) * float64(time.Second))
-	time.Sleep(time.Duration(cfg.Time*float64(time.Second)) * time.Nanosecond) // Faster, but more imprecise for large configs file
-	//time.Sleep(sleep * time.Nanosecond) // More precise for large config files, but slower
+	timeDiff := time.Since(configs.StartTime).Seconds()
+	sleep := time.Duration((cfg.Time - timeDiff) * float64(time.Second))
+	//time.Sleep(time.Duration(cfg.Time*float64(time.Second)) * time.Nanosecond) // Faster, but more imprecise for large configs file
+	time.Sleep(sleep * time.Nanosecond) // More precise for large config files, but slower
 	printTime := time.Since(configs.StartTime).Seconds()
 	log.Printf("Execution at Time: %f\n", printTime)
 	info := commandInfo{
