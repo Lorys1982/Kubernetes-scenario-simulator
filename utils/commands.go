@@ -34,8 +34,9 @@ type Operations interface {
 }
 
 type commandInfo struct {
-	Queue  configs.Queue
-	CmdSeq int
+	Queue   configs.Queue
+	CmdSeq  int
+	ExecDir string
 }
 
 func CommandExists(command string) bool {
@@ -48,8 +49,9 @@ func concurrentCommandRun(cmd *exec.Cmd, cfg configs.Command, wg *sync.WaitGroup
 	time.Sleep(time.Duration(cfg.Time) * time.Second)
 	log.Printf("Execution at Time: %f\n", cfg.Time)
 	info := commandInfo{
-		Queue:  queue,
-		CmdSeq: cfg.GetIndex(),
+		Queue:   queue,
+		CmdSeq:  cfg.GetIndex(),
+		ExecDir: "configs/command_configs",
 	}
 	_ = commandRun(cmd, time.Since(configs.StartTime).Seconds(), info)
 }
@@ -59,8 +61,9 @@ func concurrentCommandCleanRun(cmd *exec.Cmd, cfg configs.Command, wg *sync.Wait
 	time.Sleep(time.Duration(cfg.Time) * time.Second)
 	log.Printf("Execution at Time: %f\n", cfg.Time)
 	info := commandInfo{
-		Queue:  queue,
-		CmdSeq: cfg.GetIndex(),
+		Queue:   queue,
+		CmdSeq:  cfg.GetIndex(),
+		ExecDir: "configs/command_configs",
 	}
 	_ = commandCleanRun(cmd, time.Since(configs.StartTime).Seconds(), info)
 }
@@ -68,6 +71,9 @@ func concurrentCommandCleanRun(cmd *exec.Cmd, cfg configs.Command, wg *sync.Wait
 func commandRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
 	if info.Queue.IsEmpty() {
 		info.Queue.Name = "<None>"
+	}
+	if info.ExecDir != "" {
+		cmd.Dir = info.ExecDir
 	}
 	outFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdOut_%s.log", configs.GetCommandsConfName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr_%s.log", configs.GetCommandsConfName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
@@ -108,6 +114,9 @@ func commandRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
 func commandCleanRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
 	if info.Queue.IsEmpty() {
 		info.Queue.Name = "<None>"
+	}
+	if info.ExecDir != "" {
+		cmd.Dir = info.ExecDir
 	}
 	outFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdOut_%s.log", configs.GetCommandsConfName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr_%s.log", configs.GetCommandsConfName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
@@ -150,8 +159,9 @@ func concurrentExecWrapper(fullCmd []string, cfg configs.Command, wg *sync.WaitG
 	time.Sleep(time.Duration(cfg.Time) * time.Second)
 	log.Printf("Execution at Time: %f\n", cfg.Time)
 	info := commandInfo{
-		Queue:  queue,
-		CmdSeq: cfg.GetIndex(),
+		Queue:   queue,
+		CmdSeq:  cfg.GetIndex(),
+		ExecDir: "configs/command_configs",
 	}
 	execWrapper(fullCmd, cfg, info)
 }
@@ -173,7 +183,7 @@ func execWrapper(fullCmd []string, cfg configs.Command, info commandInfo) {
 		}
 	case "kube":
 		object = kube{
-			Filename: path.Join("configs/command_configs", cfg.Filename),
+			Filename: cfg.Filename,
 			Args:     cfg.Args,
 		}
 	default:
@@ -277,8 +287,9 @@ func KwokctlCreate() {
 
 	cmd := exec.Command("kwokctl", args...)
 	err := commandRun(cmd, 0, commandInfo{
-		Queue:  configs.Queue{},
-		CmdSeq: 0,
+		Queue:   configs.Queue{},
+		CmdSeq:  0,
+		ExecDir: "configs/topology",
 	})
 	if err != nil {
 		KwokctlDelete()
@@ -291,8 +302,9 @@ func KwokctlDelete() {
 
 	cmd := exec.Command("kwokctl", args...)
 	err := commandCleanRun(cmd, time.Since(configs.StartTime).Seconds(), commandInfo{
-		Queue:  configs.Queue{},
-		CmdSeq: 0,
+		Queue:   configs.Queue{},
+		CmdSeq:  0,
+		ExecDir: "configs/topology",
 	})
 	if err != nil {
 		return
@@ -346,15 +358,17 @@ func KubectlGet(execTime float64, info commandInfo, cmdArgs ...string) {
 
 func NodeCreate(nodes node) {
 	nodes.Create(0, commandInfo{
-		Queue:  configs.Queue{},
-		CmdSeq: 0,
+		Queue:   configs.Queue{},
+		CmdSeq:  0,
+		ExecDir: "configs/topology",
 	})
 }
 
 func NodeDelete(nodes node) {
 	nodes.Delete(0, commandInfo{
-		Queue:  configs.Queue{},
-		CmdSeq: 0,
+		Queue:   configs.Queue{},
+		CmdSeq:  0,
+		ExecDir: "configs/topology",
 	})
 }
 
@@ -378,7 +392,7 @@ func (nodes node) Create(execTime float64, info commandInfo) {
 			nodeMutex.Lock()
 			currentIndex := node.GetCurrentIndex()
 			fileReplace(nodeConfName, nodeName, nodeName+"-"+strconv.Itoa(currentIndex), *optionInput)
-			KubectlApply(nodeConfName, execTime, info)
+			KubectlApply(path.Base(nodeConfName), execTime, info)
 			node.SetCurrentIndex(currentIndex + 1)
 			nodeMutex.Unlock()
 		}
@@ -387,6 +401,7 @@ func (nodes node) Create(execTime float64, info commandInfo) {
 	}
 }
 
+// TODO Could use the Option object to fix the kubectlDelete difference from every other kubectl[Command]
 func (nodes node) Delete(execTime float64, info commandInfo) {
 	for _, node := range nodes {
 		nodeName, err := node.GetName()

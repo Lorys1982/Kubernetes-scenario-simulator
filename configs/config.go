@@ -106,7 +106,6 @@ type nodeCurrentReplicas struct {
 type Node struct {
 	ConfigName string `yaml:"filename"`
 	Count      int    `yaml:"count"`
-	name       string
 }
 
 // GetName returns the name from metadata of the
@@ -189,7 +188,12 @@ func GetAuditConf() string {
 }
 
 // GetCommandsConfName returns the name of the commands config file
-func GetCommandsConfName() string { return commandsConf.Metadata.Name }
+func GetCommandsConfName() string {
+	if commandsConf == nil {
+		return ""
+	}
+	return commandsConf.Metadata.Name
+}
 
 // GetQueues returns a list of Queue
 func GetQueues() []Queue {
@@ -207,20 +211,16 @@ func (q Queue) IsEmpty() bool { return q.Name == "" }
 // associated Command
 func (c Command) GetIndex() int { return c.index }
 
-// fixFilePath replaces the filenames in the config file with
-// the path to the filename in the topology directory
-func fixFilePath() {
-	for i, kconf := range conf.KwokConfigs {
-		conf.KwokConfigs[i] = path.Join("configs", "topology", kconf)
+// confPreprocess manages every operation which counts as a
+// pre-operation / finalizer for the Config struct
+func confPreprocess() {
+	for i := range conf.Nodes {
+		conf.Nodes[i].ConfigName = path.Join("configs", "topology", conf.Nodes[i].ConfigName)
 	}
-	if conf.Audit != "" {
-		conf.Audit = path.Join("configs", "topology", conf.Audit)
-	}
-	for i, node := range conf.Nodes {
-		conf.Nodes[i].ConfigName = path.Join("configs", "topology", node.ConfigName)
-	}
-	if conf.Commands != "" {
-		conf.Commands = path.Join("configs", "command_configs", conf.Commands)
+	for i := range commandsConf.Spec.Queues {
+		for j := range commandsConf.Spec.Queues[i].Sequence {
+			commandsConf.Spec.Queues[i].Sequence[j].index = j + 1
+		}
 	}
 }
 
@@ -236,9 +236,8 @@ func NewConfig() {
 	if err != nil {
 		CrashLog(err.Error())
 	}
-	fixFilePath()
 
-	yamlFile, err = os.ReadFile(conf.Commands)
+	yamlFile, err = os.ReadFile(path.Join("configs", "command_configs", conf.Commands))
 
 	if err != nil {
 		CrashLog(err.Error())
@@ -247,9 +246,5 @@ func NewConfig() {
 	if err != nil {
 		CrashLog(err.Error())
 	}
-	for i := range commandsConf.Spec.Queues {
-		for j := range commandsConf.Spec.Queues[i].Sequence {
-			commandsConf.Spec.Queues[i].Sequence[j].index = j + 1
-		}
-	}
+	confPreprocess()
 }
