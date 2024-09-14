@@ -476,3 +476,9 @@ func crashLog(err string) {
 	KwokctlDelete()
 	configs.CrashLog(err)
 }
+
+// TODO some features that could be appreciated:
+// 1. Pods and deployments replicator, but as different resources, not replicas (like the nodes)
+// 2. Cluster's users operations (create, delete ...)
+// 3. Kubeconfig autofill for cluster and context
+// 4. commands repetition until they work for a specified amount of time
