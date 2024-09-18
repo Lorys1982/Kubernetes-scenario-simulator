@@ -31,6 +31,7 @@ type Operations interface {
 	Delete(float64, commandInfo)
 	Apply(float64, commandInfo)
 	Get(float64, commandInfo)
+	Scale(float64, commandInfo)
 }
 
 type commandInfo struct {
@@ -185,6 +186,7 @@ func execWrapper(fullCmd []string, cfg configs.Command, info commandInfo) {
 		object = kube{
 			Filename: cfg.Filename,
 			Args:     cfg.Args,
+			Count:    cfg.Count,
 		}
 	default:
 		crashLog(fmt.Sprintf("Resource %s does not exist", fullCmd[0]))
@@ -202,6 +204,8 @@ func execWrapper(fullCmd []string, cfg configs.Command, info commandInfo) {
 		object.Get(time.Since(configs.StartTime).Seconds(), info)
 	case "apply":
 		object.Apply(time.Since(configs.StartTime).Seconds(), info)
+	case "scale":
+		object.Scale(time.Since(configs.StartTime).Seconds(), info)
 	default:
 		crashLog("No action was provided")
 	}
@@ -356,6 +360,18 @@ func KubectlGet(execTime float64, info commandInfo, cmdArgs ...string) {
 	_ = commandRun(cmd, execTime, info)
 }
 
+func kubectScale(replicas int, execTime float64, info commandInfo, cmdArgs ...string) {
+	args := []string{"scale"}
+	args = append(args, cmdArgs...)
+	args = append(args, "--replicas", strconv.Itoa(replicas))
+	if info.Queue.Kubeconfig != "" {
+		args = append(args, "--kubeconfig", info.Queue.Kubeconfig)
+	}
+
+	cmd := exec.Command("kubectl", args...)
+	_ = commandRun(cmd, execTime, info)
+}
+
 func NodeCreate(nodes node) {
 	nodes.Create(0, commandInfo{
 		Queue:   configs.Queue{},
@@ -437,6 +453,19 @@ func (nodes node) Get(execTime float64, info commandInfo) {
 	KubectlGet(execTime, info, "no")
 }
 
+func (nodes node) Scale(execTime float64, info commandInfo) {
+	wantedReplicas := nodes[0].GetCount()
+	currentReplicas := nodes[0].GetCurrentIndex()
+
+	if currentReplicas > wantedReplicas {
+		nodes[0].Count = currentReplicas - wantedReplicas
+		nodes.Delete(execTime, info)
+	} else if currentReplicas < wantedReplicas {
+		nodes[0].Count = wantedReplicas - currentReplicas
+		nodes.Create(execTime, info)
+	}
+}
+
 func (k kube) Create(execTime float64, info commandInfo) {
 	k.Args = fixArgs(k.Args)
 	KubectlCreate(k.Filename, execTime, info, k.Args...)
@@ -460,6 +489,11 @@ func (k kube) Get(execTime float64, info commandInfo) {
 	KubectlGet(execTime, info, k.Args...)
 }
 
+func (k kube) Scale(execTime float64, info commandInfo) {
+	k.Args = fixArgs(k.Args)
+	kubectScale(k.Count, execTime, info, k.Args...)
+}
+
 func fixArgs(args []string) []string {
 	var rArgs []string
 	for _, arg := range args {
@@ -476,9 +510,3 @@ func crashLog(err string) {
 	KwokctlDelete()
 	configs.CrashLog(err)
 }
-
-// TODO some features that could be appreciated:
-// 1. Pods and deployments replicator, but as different resources, not replicas (like the nodes)
-// 2. Cluster's users operations (create, delete ...)
-// 3. Kubeconfig autofill for cluster and context
-// 4. commands repetition until they work for a specified amount of time

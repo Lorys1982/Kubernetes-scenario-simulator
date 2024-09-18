@@ -41,6 +41,7 @@ func (o *Option[T]) GetSome() T {
 type Kube struct {
 	Filename string
 	Args     []string
+	Count    int
 }
 
 // Config struct contains all the data of
