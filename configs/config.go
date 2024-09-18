@@ -99,7 +99,7 @@ type nodeInfo struct {
 // nodeCurrentReplicas struct is an auxiliary struct to
 // keep track of the amount of nodes already deployed
 type nodeCurrentReplicas struct {
-	configName   string
+	nodeName     string
 	currentIndex int
 }
 
@@ -107,11 +107,21 @@ type nodeCurrentReplicas struct {
 type Node struct {
 	ConfigName string `yaml:"filename"`
 	Count      int    `yaml:"count"`
+	name       string
 }
 
 // GetName returns the name from metadata of the
 // corresponding node
 func (node Node) GetName() (string, error) {
+	if node.name == "" {
+		return node.inferName()
+	} else {
+		return node.name, nil
+	}
+}
+
+// inferName gets the name of the node for the first time
+func (node Node) inferName() (string, error) {
 	yamlFile, err := os.ReadFile(node.GetConfName())
 	var ni *nodeInfo
 
@@ -125,15 +135,16 @@ func (node Node) GetName() (string, error) {
 	if ni == nil {
 		return "", errors.New("Missing parameter: 'name' in " + node.GetConfName())
 	}
+	node.name = ni.Metadata.Name
 	return ni.Metadata.Name, nil
 }
 
 // GetCurrentIndex fetches the current nodes number from
 // the associated node
 func (node Node) GetCurrentIndex() int {
-	configName := node.ConfigName
+	nodeName, _ := node.GetName()
 	for i := range nodeCurrentReplicasVec {
-		if path.Base(nodeCurrentReplicasVec[i].configName) == path.Base(configName) {
+		if nodeCurrentReplicasVec[i].nodeName == nodeName {
 			return nodeCurrentReplicasVec[i].currentIndex
 		}
 	}
@@ -144,15 +155,15 @@ func (node Node) GetCurrentIndex() int {
 // SetCurrentIndex sets the number of nodes deployed from the
 // associated node
 func (node Node) SetCurrentIndex(index int) {
-	configName := node.ConfigName
+	nodeName, _ := node.GetName()
 	for i := range nodeCurrentReplicasVec {
-		if path.Base(nodeCurrentReplicasVec[i].configName) == path.Base(configName) {
+		if nodeCurrentReplicasVec[i].nodeName == nodeName {
 			nodeCurrentReplicasVec[i].currentIndex = index
 			return
 		}
 	}
 	nodeCurrentReplicasVec = append(nodeCurrentReplicasVec, nodeCurrentReplicas{
-		configName:   configName,
+		nodeName:     nodeName,
 		currentIndex: 0,
 	})
 }
