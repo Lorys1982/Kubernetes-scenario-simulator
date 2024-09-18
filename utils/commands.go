@@ -491,6 +491,9 @@ func (k kube) Get(execTime float64, info commandInfo) {
 
 func (k kube) Scale(execTime float64, info commandInfo) {
 	k.Args = fixArgs(k.Args)
+	if k.Filename != "" {
+		k.Args = append([]string{"-f", k.Filename}, k.Args...)
+	}
 	kubectScale(k.Count, execTime, info, k.Args...)
 }
 

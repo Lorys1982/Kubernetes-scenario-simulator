@@ -51,6 +51,8 @@ nano config.yaml # or: whatever other text editor
 > This is how to fill the config file.
 > A more in-depth explanation is below ([Jump](#configuration))
 > ```yaml
+> apiVersion: k8s-sim.fbk.eu/v1alpha1
+> kind: SimConfiguration
 > clusterName: "<cluster-name>" # The name of the cluster
 > kwokConfigs: # The configs to give to kwokctl (for example the configs for a custom scheduler)
 >   - "<conf1.yaml>"
@@ -73,8 +75,8 @@ nano config.yaml # or: whatever other text editor
 > This is how to fill the config file
 > A more in-depth explanation is below ([Jump](#configuration))
 > ```yaml
-> kind: "" # Unused for now
-> apiVersion: "" # Unused for now
+> apiVersion: k8s-sim.fbk.eu/v1alpha1
+> kind: SimCommandsConfiguration
 > metadata:
 > name: "" # The name of the scenario simulation
 > spec:
@@ -115,7 +117,7 @@ Besides the normal _KWOK_ and _Kubectl_ config files, There are **Two** required
 
 They will be automatically generated on [**_Initialization,_**](#run-on-linux) and you'll only need to fill them.
 
-### Topology configuration
+### SimConfiguration
 
 **Just one** of this configs file can exist at a time.  
 This configuration manages the cluster's topology, it is used to set up the Kwok cluster specifying **nodes**,
@@ -124,6 +126,8 @@ This configuration manages the cluster's topology, it is used to set up the Kwok
 **Location:** `./configs/config.yaml`
 
 #### Fields
+- **apiVersion [string]:** Version of the Simulator api
+- **kind [string]:** The type of object you are specifying (`SimConfiguration`)
 - **clusterName [string]:** Name of the kwok cluster, mainly introduced to match the name inside kwok configs
 - **kwokConfigs [string list]:** List of config files (.yaml) applicable to kwok cluster creation 
 - **nodes [nodes list]:** List of nodes, each composed of _name_ and _count_
@@ -137,7 +141,7 @@ directory
 > [!NOTE]
 > Nodes will be explained better below [(Jump)](#nodes)
 
-### Scenario Configuration
+### SimCommandsConfiguration
 
 **Multiple** of these config files can exist at a time. 
 This configuration manages the scenario you want to reproduce, it supports multiple **simultaneous queues** to simulate
@@ -147,8 +151,8 @@ from the start of the simulation.
 **Location:** `./configs/command_configs/config.yaml` (Note that the config name is **variable**)
 
 #### Fields
-- **kind [string]:** #TODO
-- **apiVersion [string]:** #TODO
+- **apiVersion [string]:** Version of the Simulator api
+- **kind [string]:** The type of object you are specifying (`SimCommandsConfiguration`)
 - **metadata [metadata list]:** Data about the scenario
   - **name [string]:** Name of the scenario, will influence the name of the logs [(Jump)](#logs)
 - **spec [specs]:** Configs to program the simulation
@@ -186,15 +190,45 @@ The nodes created this way will be called **"_node_name_-N"** with **N** being a
 ### Commands
 
 The simulator provides commands of its own to improve **QoL**.  
-These commands are composed by two parts (Order matters):
-- **Resource:** The _first part_ of the command, determines on what we are acting
-  - _**Node** resource:_ **Actions** will be executed **nodes** 
+These commands are composed by two parts (Order matters): 
+
+_command: \<resource> \<action>_ 
+
+**Resource:** The _first part_ of the command, determines on what we are acting
+  - _**Node** resource:_ **Actions** will be executed on **nodes**
   - _**Kube** resource:_ **Actions** will be executed using **kubectl**
-- **Action:** The _second part_ of the command, determines what to do
-  - _**Create** action:_ **Creates** The resource / By using the resource
-  - _**Apply** action:_ **Applies** The resource / By using the resource
-  - _**Delete** action:_ **Deletes** The resource / By using the resource
-  - _**Get** action:_ **Gets** The resource / By using the resource
+
+**Action:** The _second part_ of the command, determines what to do
+  - _**Create** action:_ **Creates** The resource / By using the resource.  
+  It makes use of the fields:
+    - _**Time:**_ to specify the time of execution
+    - _**Count [Not working with kube resource]:**_ to specify the number of objects to create 
+    - _**Filename:**_ to specify the file to create
+    - _**Args [Optional]:**_ to specify some custom args
+  - _**Apply** action:_ **Applies** The resource / By using the resource.  
+    It makes use of the fields:
+    - _**Time:**_ to specify the time of execution
+    - _**Count [Not working with kube resource]:**_ to specify the number of objects to delete
+    - _**Filename:**_ to specify the file to apply
+    - _**Args [Optional]:**_ to specify some custom args
+  - _**Delete** action:_ **Deletes** The resource / By using the resource.  
+    It makes use of the fields:
+    - _**Time:**_ to specify the time of execution
+    - _**Count [Not working with kube resource]:**_ to specify the number of objects to apply
+    - _**Filename [Optional for kube resource]:**_ to specify the file to delete
+    - _**Args:**_ if filename is not set it is _**[Mandatory]**_, used to specify the object type and its name, 
+    otherwise it is _**[Optional]**_, used just for your custom args
+  - _**Get** action:_ **Gets** The resource / By using the resource.  
+    It makes use of the fields:
+    - _**Time:**_ to specify the time of execution
+    - _**Args:**_ to specify the object type to visualize and for any other args
+  - _**Scale** action:_ **Scales** The resource / by using the resource.  
+    It makes use of the fields:
+    - _**Time:**_ to specify the time of execution
+    - _**Count:**_ to specify the desired number of replicas of the resource
+    - _**Filename [Optional for kube resource]:**_ to specify the file to scale
+    - _**Args:**_ if filename is not set it is _**[Mandatory]**_, used to specify the object type and its name,
+      otherwise it is _**[Optional]**_, used just for your custom args
 
 ## Logs
 
