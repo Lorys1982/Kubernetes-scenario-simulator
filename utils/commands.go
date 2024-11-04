@@ -47,7 +47,7 @@ func CommandExists(command string) bool {
 
 func concurrentCommandRun(cmd *exec.Cmd, cfg configs.Command, wg *sync.WaitGroup, queue configs.Queue) {
 	defer wg.Done()
-	time.Sleep(time.Duration(cfg.Time) * time.Second)
+	time.Sleep(time.Duration(cfg.Time*float64(time.Second)) * time.Nanosecond)
 	log.Printf("Execution at Time: %f\n", cfg.Time)
 	info := commandInfo{
 		Queue:   queue,
@@ -59,7 +59,7 @@ func concurrentCommandRun(cmd *exec.Cmd, cfg configs.Command, wg *sync.WaitGroup
 
 func concurrentCommandCleanRun(cmd *exec.Cmd, cfg configs.Command, wg *sync.WaitGroup, queue configs.Queue) {
 	defer wg.Done()
-	time.Sleep(time.Duration(cfg.Time) * time.Second)
+	time.Sleep(time.Duration(cfg.Time*float64(time.Second)) * time.Nanosecond)
 	log.Printf("Execution at Time: %f\n", cfg.Time)
 	info := commandInfo{
 		Queue:   queue,
@@ -157,7 +157,7 @@ func commandCleanRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
 
 func concurrentExecWrapper(fullCmd []string, cfg configs.Command, wg *sync.WaitGroup, queue configs.Queue) {
 	defer wg.Done()
-	time.Sleep(time.Duration(cfg.Time) * time.Second)
+	time.Sleep(time.Duration(cfg.Time*float64(time.Second)) * time.Nanosecond)
 	log.Printf("Execution at Time: %f\n", cfg.Time)
 	info := commandInfo{
 		Queue:   queue,
