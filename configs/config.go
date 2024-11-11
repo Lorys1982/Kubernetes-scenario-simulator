@@ -112,7 +112,7 @@ type Node struct {
 
 // GetName returns the name from metadata of the
 // corresponding node
-func (node Node) GetName() (string, error) {
+func (node *Node) GetName() (string, error) {
 	if node.name == "" {
 		return node.inferName()
 	} else {
@@ -121,7 +121,7 @@ func (node Node) GetName() (string, error) {
 }
 
 // inferName gets the name of the node for the first time
-func (node Node) inferName() (string, error) {
+func (node *Node) inferName() (string, error) {
 	yamlFile, err := os.ReadFile(node.GetConfName())
 	var ni *nodeInfo
 
@@ -141,7 +141,7 @@ func (node Node) inferName() (string, error) {
 
 // GetCurrentIndex fetches the current nodes number from
 // the associated node
-func (node Node) GetCurrentIndex() int {
+func (node *Node) GetCurrentIndex() int {
 	nodeName, _ := node.GetName()
 	for i := range nodeCurrentReplicasVec {
 		if nodeCurrentReplicasVec[i].nodeName == nodeName {
@@ -154,7 +154,7 @@ func (node Node) GetCurrentIndex() int {
 
 // SetCurrentIndex sets the number of nodes deployed from the
 // associated node
-func (node Node) SetCurrentIndex(index int) {
+func (node *Node) SetCurrentIndex(index int) {
 	nodeName, _ := node.GetName()
 	for i := range nodeCurrentReplicasVec {
 		if nodeCurrentReplicasVec[i].nodeName == nodeName {
@@ -170,12 +170,12 @@ func (node Node) SetCurrentIndex(index int) {
 
 // GetConfName returns the config file name of the
 // associated node
-func (node Node) GetConfName() string {
+func (node *Node) GetConfName() string {
 	return node.ConfigName
 }
 
 // GetCount returns the replicas wanted for the associated node
-func (node Node) GetCount() int {
+func (node *Node) GetCount() int {
 	return node.Count
 }
 
