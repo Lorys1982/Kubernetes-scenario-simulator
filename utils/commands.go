@@ -19,6 +19,10 @@ import (
 
 var nodeMutex sync.Mutex
 var logMutex sync.Mutex
+var logChannelStd = make(chan *bufio.Writer)
+var logChannelErr = make(chan []byte)
+var killChannel1 = make(chan bool)
+var killChannel2 = make(chan bool)
 
 type kube configs.Kube
 type node []configs.Node
@@ -43,6 +47,38 @@ type commandInfo struct {
 func CommandExists(command string) bool {
 	_, err := exec.LookPath(command)
 	return err == nil
+}
+
+func BufferOutWriter() {
+	var toWrite *bufio.Writer
+	outFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdOut_%s.log", configs.GetCommandsConfName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	defer outFile.Close()
+
+	for {
+		select {
+		case toWrite = <-logChannelStd:
+			toWrite.Flush()
+		case <-killChannel1:
+			close(logChannelStd)
+			return
+		}
+	}
+}
+
+func BufferErrWriter() {
+	var toWrite []byte
+	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr_%s.log", configs.GetCommandsConfName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	defer errFile.Close()
+
+	for {
+		select {
+		case toWrite = <-logChannelErr:
+			errFile.Write(toWrite)
+		case <-killChannel2:
+			close(logChannelErr)
+			return
+		}
+	}
 }
 
 func concurrentCommandRun(cmd *exec.Cmd, cfg configs.Command, wg *sync.WaitGroup, queue configs.Queue) {
@@ -105,9 +141,9 @@ func commandRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
 	errLog.Printf("Executed at Time: %f Seconds\n\n", execTime)
 
 	logMutex.Lock()
-	stdBuff.Flush()
+	defer logMutex.Unlock()
+	logChannelStd <- stdBuff
 	errBuff.Flush()
-	logMutex.Unlock()
 
 	return cmdErr
 }
@@ -219,6 +255,8 @@ func ConcurrentQueueRun(queues []configs.Queue) {
 		go ConcurrentCommandsRun(queue, &wgQueues)
 	}
 	wgQueues.Wait()
+	killChannel1 <- true
+	killChannel2 <- true
 }
 
 func ConcurrentCommandsRun(queue configs.Queue, wgQueues *sync.WaitGroup) {

@@ -25,6 +25,9 @@ func Simulation() {
 		log.Fatal("kubectl not installed")
 	}
 
+	go utils.BufferOutWriter()
+	go utils.BufferErrWriter()
+
 	// Cluster Creation
 	utils.KwokctlCreate()
 
