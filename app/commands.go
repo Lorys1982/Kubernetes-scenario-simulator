@@ -1,4 +1,4 @@
-package utils
+package app
 
 import (
 	"bytes"
@@ -7,6 +7,8 @@ import (
 	"io"
 	"log"
 	"main/configs"
+	"main/utils"
+	"main/writers"
 	"os"
 	"os/exec"
 	"path"
@@ -18,10 +20,8 @@ import (
 )
 
 var nodeMutex sync.Mutex
-var logChannelStd = make(chan []byte)
-var logChannelErr = make(chan []byte)
-var killChannel1 = make(chan bool)
-var killChannel2 = make(chan bool)
+var logChannelStd = writers.LogChannelStd
+var logChannelErr = writers.LogChannelErr
 
 type kube configs.Kube
 type node []configs.Node
@@ -46,36 +46,6 @@ type commandInfo struct {
 func CommandExists(command string) bool {
 	_, err := exec.LookPath(command)
 	return err == nil
-}
-
-func BufferOutWriter() {
-	var toWrite []byte
-	outFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdOut_%s.log", configs.GetCommandsConfName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	defer outFile.Close()
-	for {
-		select {
-		case toWrite = <-logChannelStd:
-			outFile.Write(toWrite)
-		case <-killChannel1:
-			close(logChannelStd)
-			return
-		}
-	}
-}
-
-func BufferErrWriter() {
-	var toWrite []byte
-	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr_%s.log", configs.GetCommandsConfName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	defer errFile.Close()
-	for {
-		select {
-		case toWrite = <-logChannelErr:
-			errFile.Write(toWrite)
-		case <-killChannel2:
-			close(logChannelErr)
-			return
-		}
-	}
 }
 
 func concurrentCommandRun(cmd *exec.Cmd, cfg configs.Command, wg *sync.WaitGroup, queue configs.Queue) {
@@ -240,8 +210,6 @@ func ConcurrentQueueRun(queues []configs.Queue) {
 		go ConcurrentCommandsRun(queue, &wgQueues)
 	}
 	wgQueues.Wait()
-	killChannel1 <- true
-	killChannel2 <- true
 }
 
 func ConcurrentCommandsRun(queue configs.Queue, wgQueues *sync.WaitGroup) {
@@ -412,7 +380,7 @@ func NodeDelete(nodes node) {
 }
 
 func (nodes node) Create(execTime float64, info commandInfo) {
-	var optionInput = &configs.Option[[]byte]{}
+	var optionInput = &utils.Option[[]byte]{}
 	for _, node := range nodes {
 		nodeName, err := node.GetName()
 		if err != nil {
@@ -430,13 +398,13 @@ func (nodes node) Create(execTime float64, info commandInfo) {
 		for range replicas {
 			nodeMutex.Lock()
 			currentIndex := node.GetCurrentIndex()
-			fileReplace(nodeConfName, nodeName, nodeName+"-"+strconv.Itoa(currentIndex), *optionInput)
+			utils.FileReplace(nodeConfName, nodeName, nodeName+"-"+strconv.Itoa(currentIndex), *optionInput)
 			KubectlApply(path.Base(nodeConfName), execTime, info)
 			node.SetCurrentIndex(currentIndex + 1)
 			nodeMutex.Unlock()
 		}
 		// Just restores input (the initial file)
-		fileReplace(nodeConfName, "", "", *optionInput)
+		utils.FileReplace(nodeConfName, "", "", *optionInput)
 	}
 }
 
@@ -529,10 +497,9 @@ func fixArgs(args []string) []string {
 }
 
 func errLog(err string, s string) {
-	configs.ErrLog(err, s)
+	writers.ErrLog(err, s)
 }
 
 func crashLog(err string) {
-	KwokctlDelete()
-	configs.CrashLog(err)
+	writers.CrashLog(err, KwokctlDelete)
 }

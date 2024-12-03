@@ -3,6 +3,7 @@ package configs
 import (
 	"errors"
 	"gopkg.in/yaml.v2"
+	"main/writers"
 	"os"
 	"path"
 	"time"
@@ -11,30 +12,7 @@ import (
 var conf *Config
 var nodeCurrentReplicasVec []nodeCurrentReplicas
 var commandsConf *CommandsConf
-var LogTime = time.Now().Format("2006-01-02_15:04:05")
 var StartTime time.Time
-
-// Option simple implementation from rust, if functions with multiple
-// optional parameters are ever needed
-type Option[T any] struct {
-	none bool
-	some T
-}
-
-func (o *Option[T]) IsNone() bool {
-	return o.none
-}
-func (o *Option[T]) IsSome() bool {
-	return !o.none
-}
-func (o *Option[T]) None() { o.none = true } // None sets the Option object to none
-func (o *Option[T]) Some(data T) {
-	o.none = false
-	o.some = data
-} // Some sets the Option object to some, filling it with data
-func (o *Option[T]) GetSome() T {
-	return o.some
-}
 
 // Kube struct is for wrapped commands who
 // want to perform operations through kubectl
@@ -242,21 +220,21 @@ func NewConfig() {
 	yamlFile, err := os.ReadFile("configs/config.yaml")
 
 	if err != nil {
-		CrashLog(err.Error())
+		writers.CrashLog(err.Error())
 	}
 	err = yaml.Unmarshal(yamlFile, &conf)
 	if err != nil {
-		CrashLog(err.Error())
+		writers.CrashLog(err.Error())
 	}
 
 	yamlFile, err = os.ReadFile(path.Join("configs", "command_configs", conf.Commands))
 
 	if err != nil {
-		CrashLog(err.Error())
+		writers.CrashLog(err.Error())
 	}
 	err = yaml.Unmarshal(yamlFile, &commandsConf)
 	if err != nil {
-		CrashLog(err.Error())
+		writers.CrashLog(err.Error())
 	}
 	confPreprocess()
 }

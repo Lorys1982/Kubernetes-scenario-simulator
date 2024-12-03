@@ -3,7 +3,6 @@ package utils
 import (
 	"compress/gzip"
 	"log"
-	"main/configs"
 	"os"
 	"path"
 	"strings"
@@ -11,8 +10,10 @@ import (
 )
 
 var fileMutex sync.Mutex
+var LogTime string
+var ConfName string
 
-// fileReplace Func to replace strings inside of files
+// FileReplace Func to replace strings inside of files
 //
 // # Parameters
 //
@@ -24,7 +25,7 @@ var fileMutex sync.Mutex
 //
 // input: if you have already opened and read the file
 // you can send it directly (if you have to do many iterations this is faster)
-func fileReplace(fileName string, toReplace string, replace string, input configs.Option[[]byte]) {
+func FileReplace(fileName string, toReplace string, replace string, input Option[[]byte]) {
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 	if input.IsNone() {
@@ -57,7 +58,7 @@ func Compress(fileName string, filepath string) {
 
 	inFile := path.Join(filepath, fileName)
 	input, _ := os.ReadFile(inFile)
-	fileName = configs.GetCommandsConfName() + "_" + configs.LogTime + ".gz"
+	fileName = ConfName + "_" + LogTime + ".gz"
 
 	outFile := path.Join(workingDir, "logs", fileName)
 	newFile, _ := os.Create(outFile)
