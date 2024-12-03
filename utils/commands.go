@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"bufio"
+	"bytes"
 	"fmt"
 	"github.com/goaux/decowriter"
 	"io"
@@ -18,8 +18,7 @@ import (
 )
 
 var nodeMutex sync.Mutex
-var logMutex sync.Mutex
-var logChannelStd = make(chan *bufio.Writer)
+var logChannelStd = make(chan []byte)
 var logChannelErr = make(chan []byte)
 var killChannel1 = make(chan bool)
 var killChannel2 = make(chan bool)
@@ -50,14 +49,13 @@ func CommandExists(command string) bool {
 }
 
 func BufferOutWriter() {
-	var toWrite *bufio.Writer
+	var toWrite []byte
 	outFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdOut_%s.log", configs.GetCommandsConfName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 	defer outFile.Close()
-
 	for {
 		select {
 		case toWrite = <-logChannelStd:
-			toWrite.Flush()
+			outFile.Write(toWrite)
 		case <-killChannel1:
 			close(logChannelStd)
 			return
@@ -69,7 +67,6 @@ func BufferErrWriter() {
 	var toWrite []byte
 	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr_%s.log", configs.GetCommandsConfName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 	defer errFile.Close()
-
 	for {
 		select {
 		case toWrite = <-logChannelErr:
@@ -112,22 +109,18 @@ func commandRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
 	if info.ExecDir != "" {
 		cmd.Dir = info.ExecDir
 	}
-	outFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdOut_%s.log", configs.GetCommandsConfName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr_%s.log", configs.GetCommandsConfName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	stdBuff := bufio.NewWriter(outFile)
-	errBuff := bufio.NewWriter(errFile)
-	defer outFile.Close()
-	defer errFile.Close()
-	outLog := log.New(stdBuff, fmt.Sprintf("[Queue: %s][Command #%d Start] ", info.Queue.Name, info.CmdSeq), log.Ltime|log.Lmicroseconds)
-	errLog := log.New(errBuff, fmt.Sprintf("[Queue: %s][Command #%d Start] ", info.Queue.Name, info.CmdSeq), log.Ltime|log.Lmicroseconds)
+	stdBuff := bytes.Buffer{}
+	errBuff := bytes.Buffer{}
+	outLog := log.New(&stdBuff, fmt.Sprintf("[Queue: %s][Command #%d Start] ", info.Queue.Name, info.CmdSeq), log.Ltime|log.Lmicroseconds)
+	errLog := log.New(&errBuff, fmt.Sprintf("[Queue: %s][Command #%d Start] ", info.Queue.Name, info.CmdSeq), log.Ltime|log.Lmicroseconds)
 
 	commandString := strings.Join(cmd.Args, " ")
 
 	outLog.Println(commandString)
 	errLog.Println(commandString)
 
-	stdPrefix := decowriter.New(stdBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.Queue.Name, info.CmdSeq)), []byte{})
-	errPrefix := decowriter.New(errBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.Queue.Name, info.CmdSeq)), []byte{})
+	stdPrefix := decowriter.New(&stdBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.Queue.Name, info.CmdSeq)), []byte{})
+	errPrefix := decowriter.New(&errBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.Queue.Name, info.CmdSeq)), []byte{})
 
 	cmd.Stdout = io.MultiWriter(os.Stdout, stdPrefix)
 	cmd.Stderr = io.MultiWriter(os.Stderr, errPrefix)
@@ -140,10 +133,8 @@ func commandRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
 	outLog.Printf("Executed at Time: %f Seconds\n\n", execTime)
 	errLog.Printf("Executed at Time: %f Seconds\n\n", execTime)
 
-	logMutex.Lock()
-	defer logMutex.Unlock()
-	logChannelStd <- stdBuff
-	errBuff.Flush()
+	logChannelStd <- stdBuff.Bytes()
+	logChannelErr <- errBuff.Bytes()
 
 	return cmdErr
 }
@@ -155,22 +146,18 @@ func commandCleanRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
 	if info.ExecDir != "" {
 		cmd.Dir = info.ExecDir
 	}
-	outFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdOut_%s.log", configs.GetCommandsConfName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr_%s.log", configs.GetCommandsConfName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	stdBuff := bufio.NewWriter(outFile)
-	errBuff := bufio.NewWriter(errFile)
-	defer outFile.Close()
-	defer errFile.Close()
-	outLog := log.New(stdBuff, fmt.Sprintf("[Queue: %s][Command #%d Start] ", info.Queue.Name, info.CmdSeq), log.Ltime|log.Lmicroseconds)
-	errLog := log.New(errBuff, fmt.Sprintf("[Queue: %s][Command #%d Start] ", info.Queue.Name, info.CmdSeq), log.Ltime|log.Lmicroseconds)
+	stdBuff := bytes.Buffer{}
+	errBuff := bytes.Buffer{}
+	outLog := log.New(&stdBuff, fmt.Sprintf("[Queue: %s][Command #%d Start] ", info.Queue.Name, info.CmdSeq), log.Ltime|log.Lmicroseconds)
+	errLog := log.New(&errBuff, fmt.Sprintf("[Queue: %s][Command #%d Start] ", info.Queue.Name, info.CmdSeq), log.Ltime|log.Lmicroseconds)
 
 	commandString := strings.Join(cmd.Args, " ")
 
 	outLog.Println(commandString)
 	errLog.Println(commandString)
 
-	stdPrefix := decowriter.New(stdBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.Queue.Name, info.CmdSeq)), []byte{})
-	errPrefix := decowriter.New(errBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.Queue.Name, info.CmdSeq)), []byte{})
+	stdPrefix := decowriter.New(&stdBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.Queue.Name, info.CmdSeq)), []byte{})
+	errPrefix := decowriter.New(&errBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.Queue.Name, info.CmdSeq)), []byte{})
 
 	cmd.Stdout = stdPrefix
 	cmd.Stderr = errPrefix
@@ -183,10 +170,8 @@ func commandCleanRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
 	outLog.Printf("Executed at Time: %f Seconds\n\n", execTime)
 	errLog.Printf("Executed at Time: %f Seconds\n\n", execTime)
 
-	logMutex.Lock()
-	stdBuff.Flush()
-	errBuff.Flush()
-	logMutex.Unlock()
+	logChannelStd <- stdBuff.Bytes()
+	logChannelErr <- errBuff.Bytes()
 
 	return cmdErr
 }
