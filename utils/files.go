@@ -3,6 +3,7 @@ package utils
 import (
 	"compress/gzip"
 	"log"
+	"main/global"
 	"os"
 	"path"
 	"strings"
@@ -10,8 +11,6 @@ import (
 )
 
 var fileMutex sync.Mutex
-var LogTime string
-var ConfName string
 
 // FileReplace Func to replace strings inside of files
 //
@@ -58,7 +57,7 @@ func Compress(fileName string, filepath string) {
 
 	inFile := path.Join(filepath, fileName)
 	input, _ := os.ReadFile(inFile)
-	fileName = ConfName + "_" + LogTime + ".gz"
+	fileName = global.ConfName + "_" + global.LogTime + ".gz"
 
 	outFile := path.Join(workingDir, "logs", fileName)
 	newFile, _ := os.Create(outFile)

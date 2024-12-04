@@ -3,11 +3,8 @@ package app
 import (
 	"log"
 	"main/configs"
-	"main/constants"
-	"main/utils"
+	"main/global"
 	"main/writers"
-	"os"
-	"path"
 )
 
 // Simulation function
@@ -17,8 +14,7 @@ import (
 // in the logs folder
 func Simulation() {
 	configs.NewConfig()
-	constants.ConfName = configs.GetCommandsConfName()
-	home, _ := os.UserHomeDir()
+	global.ConfName = configs.GetCommandsConfName()
 
 	// checks if kwokctl and kubectl is installed
 	if !CommandExists("kwokctl") {
@@ -40,9 +36,6 @@ func Simulation() {
 
 	// Executes the commands with the specified delay
 	ConcurrentQueueRun(configs.GetQueues())
-
-	// Copy and compress log file
-	utils.Compress("audit.log", path.Join(home, ".kwok/clusters", configs.GetClusterName(), "logs"))
 
 	// Cluster Deletion
 	KwokctlDelete()

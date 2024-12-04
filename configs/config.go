@@ -6,13 +6,11 @@ import (
 	"main/writers"
 	"os"
 	"path"
-	"time"
 )
 
 var conf *Config
 var nodeCurrentReplicasVec []nodeCurrentReplicas
 var commandsConf *CommandsConf
-var StartTime time.Time
 
 // Kube struct is for wrapped commands who
 // want to perform operations through kubectl

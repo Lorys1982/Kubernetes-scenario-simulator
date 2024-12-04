@@ -4,18 +4,17 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"main/global"
 	"os"
 )
 
-var ConfName string
-var LogTime string
-
 var LogChannelStd = make(chan []byte)
 var LogChannelErr = make(chan []byte)
+var killChannelErr = make(chan bool)
 
 func BufferOutWriter() {
 	var toWrite []byte
-	outFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdOut_%s.log", ConfName, LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	outFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdOut_%s.log", global.ConfName, global.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 	defer outFile.Close()
 	for {
 		select {
@@ -27,10 +26,12 @@ func BufferOutWriter() {
 
 func BufferErrWriter() {
 	var toWrite []byte
-	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr_%s.log", ConfName, LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr_%s.log", global.ConfName, global.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 	defer errFile.Close()
 	for {
 		select {
+		case <-killChannelErr:
+			return
 		case toWrite = <-LogChannelErr:
 			errFile.Write(toWrite)
 		}
@@ -40,12 +41,21 @@ func BufferErrWriter() {
 func CrashLog(err string, option ...func()) {
 	var buffer bytes.Buffer
 	errLog := log.New(&buffer, "[Fatal Error] ", log.Ltime|log.Lmicroseconds)
-	errLog.Println(err)
-	LogChannelErr <- buffer.Bytes()
+	errLog.Printf(err + "\n\n")
+
+	if global.ConfName == "" {
+		errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr_%s.log", global.ConfName, global.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+		errFile.Write(buffer.Bytes())
+		log.Fatal(buffer.String())
+	} else {
+		LogChannelErr <- buffer.Bytes()
+	}
+
 	if option[0] != nil {
 		f := option[0]
 		f()
 	}
+	killChannelErr <- true
 	log.Fatal(buffer.String())
 }
 
