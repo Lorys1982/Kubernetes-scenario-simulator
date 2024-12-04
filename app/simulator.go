@@ -3,9 +3,8 @@ package app
 import (
 	"log"
 	"main/configs"
-	"main/utils"
-	"os"
-	"path"
+	"main/global"
+	"main/writers"
 )
 
 // Simulation function
@@ -15,31 +14,29 @@ import (
 // in the logs folder
 func Simulation() {
 	configs.NewConfig()
-	home, _ := os.UserHomeDir()
+	global.ConfName = configs.GetCommandsConfName()
 
 	// checks if kwokctl and kubectl is installed
-	if !utils.CommandExists("kwokctl") {
+	if !CommandExists("kwokctl") {
 		log.Fatal("kwokctl not installed")
 	}
-	if !utils.CommandExists("kubectl") {
+	if !CommandExists("kubectl") {
 		log.Fatal("kubectl not installed")
 	}
 
-	go utils.BufferOutWriter()
-	go utils.BufferErrWriter()
+	// Logger Initialization
+	go writers.BufferOutWriter()
+	go writers.BufferErrWriter()
 
 	// Cluster Creation
-	utils.KwokctlCreate()
+	KwokctlCreate()
 
 	// node Creation
-	utils.NodeCreate(configs.GetNodesConf())
+	NodeCreate(configs.GetNodesConf())
 
 	// Executes the commands with the specified delay
-	utils.ConcurrentQueueRun(configs.GetQueues())
-
-	// Copy and compress log file
-	utils.Compress("audit.log", path.Join(home, ".kwok/clusters", configs.GetClusterName(), "logs"))
+	ConcurrentQueueRun(configs.GetQueues())
 
 	// Cluster Deletion
-	utils.KwokctlDelete()
+	KwokctlDelete()
 }

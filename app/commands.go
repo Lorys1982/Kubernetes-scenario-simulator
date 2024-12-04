@@ -1,4 +1,4 @@
-package utils
+package app
 
 import (
 	"bytes"
@@ -7,6 +7,9 @@ import (
 	"io"
 	"log"
 	"main/configs"
+	"main/global"
+	"main/utils"
+	"main/writers"
 	"os"
 	"os/exec"
 	"path"
@@ -18,10 +21,10 @@ import (
 )
 
 var nodeMutex sync.Mutex
-var logChannelStd = make(chan []byte)
-var logChannelErr = make(chan []byte)
-var killChannel1 = make(chan bool)
-var killChannel2 = make(chan bool)
+var logChannelStd = writers.LogChannelStd
+var logChannelErr = writers.LogChannelErr
+var crashLock sync.Mutex
+var crashBool = false
 
 type kube configs.Kube
 type node []configs.Node
@@ -43,39 +46,24 @@ type commandInfo struct {
 	ExecDir string
 }
 
+// crashHalt function to stop command execution on a fatal error during cluster deletion
+// choice:
+//   - 1 -> check lock
+//   - 0 -> lock
+func crashHalt(choice bool) {
+	if choice {
+		if crashBool {
+			crashLock.Lock()
+		}
+		return
+	}
+	crashBool = true
+	crashLock.Lock()
+}
+
 func CommandExists(command string) bool {
 	_, err := exec.LookPath(command)
 	return err == nil
-}
-
-func BufferOutWriter() {
-	var toWrite []byte
-	outFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdOut_%s.log", configs.GetCommandsConfName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	defer outFile.Close()
-	for {
-		select {
-		case toWrite = <-logChannelStd:
-			outFile.Write(toWrite)
-		case <-killChannel1:
-			close(logChannelStd)
-			return
-		}
-	}
-}
-
-func BufferErrWriter() {
-	var toWrite []byte
-	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr_%s.log", configs.GetCommandsConfName(), configs.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	defer errFile.Close()
-	for {
-		select {
-		case toWrite = <-logChannelErr:
-			errFile.Write(toWrite)
-		case <-killChannel2:
-			close(logChannelErr)
-			return
-		}
-	}
 }
 
 func concurrentCommandRun(cmd *exec.Cmd, cfg configs.Command, wg *sync.WaitGroup, queue configs.Queue) {
@@ -87,7 +75,8 @@ func concurrentCommandRun(cmd *exec.Cmd, cfg configs.Command, wg *sync.WaitGroup
 		CmdSeq:  cfg.GetIndex(),
 		ExecDir: "configs/command_configs",
 	}
-	_ = commandRun(cmd, time.Since(configs.StartTime).Seconds(), info)
+	crashHalt(true)
+	_ = commandRun(cmd, time.Since(global.StartTime).Seconds(), info)
 }
 
 func concurrentCommandCleanRun(cmd *exec.Cmd, cfg configs.Command, wg *sync.WaitGroup, queue configs.Queue) {
@@ -99,7 +88,8 @@ func concurrentCommandCleanRun(cmd *exec.Cmd, cfg configs.Command, wg *sync.Wait
 		CmdSeq:  cfg.GetIndex(),
 		ExecDir: "configs/command_configs",
 	}
-	_ = commandCleanRun(cmd, time.Since(configs.StartTime).Seconds(), info)
+	crashHalt(true)
+	_ = commandCleanRun(cmd, time.Since(global.StartTime).Seconds(), info)
 }
 
 func commandRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
@@ -185,6 +175,7 @@ func concurrentExecWrapper(fullCmd []string, cfg configs.Command, wg *sync.WaitG
 		CmdSeq:  cfg.GetIndex(),
 		ExecDir: "configs/command_configs",
 	}
+	crashHalt(true)
 	execWrapper(fullCmd, cfg, info)
 }
 
@@ -216,17 +207,17 @@ func execWrapper(fullCmd []string, cfg configs.Command, info commandInfo) {
 	// Action switch
 	switch action {
 	case "create":
-		object.Create(time.Since(configs.StartTime).Seconds(), info)
+		object.Create(time.Since(global.StartTime).Seconds(), info)
 		break
 	case "delete":
-		object.Delete(time.Since(configs.StartTime).Seconds(), info)
+		object.Delete(time.Since(global.StartTime).Seconds(), info)
 		break
 	case "get":
-		object.Get(time.Since(configs.StartTime).Seconds(), info)
+		object.Get(time.Since(global.StartTime).Seconds(), info)
 	case "apply":
-		object.Apply(time.Since(configs.StartTime).Seconds(), info)
+		object.Apply(time.Since(global.StartTime).Seconds(), info)
 	case "scale":
-		object.Scale(time.Since(configs.StartTime).Seconds(), info)
+		object.Scale(time.Since(global.StartTime).Seconds(), info)
 	default:
 		crashLog("No action was provided")
 	}
@@ -234,14 +225,12 @@ func execWrapper(fullCmd []string, cfg configs.Command, info commandInfo) {
 
 func ConcurrentQueueRun(queues []configs.Queue) {
 	var wgQueues sync.WaitGroup
-	configs.StartTime = time.Now()
+	global.StartTime = time.Now()
 	for _, queue := range queues {
 		wgQueues.Add(1)
 		go ConcurrentCommandsRun(queue, &wgQueues)
 	}
 	wgQueues.Wait()
-	killChannel1 <- true
-	killChannel2 <- true
 }
 
 func ConcurrentCommandsRun(queue configs.Queue, wgQueues *sync.WaitGroup) {
@@ -319,16 +308,21 @@ func KwokctlCreate() {
 		ExecDir: "configs/topology",
 	})
 	if err != nil {
-		KwokctlDelete()
 		crashLog(err.Error())
 	}
 }
 
 func KwokctlDelete() {
 	args := clusterArgs(false)
+	home, _ := os.UserHomeDir()
+
+	crashHalt(false)
+
+	// Copy and compress log file
+	utils.Compress("audit.log", path.Join(home, ".kwok/clusters", configs.GetClusterName(), "logs"))
 
 	cmd := exec.Command("kwokctl", args...)
-	err := commandCleanRun(cmd, time.Since(configs.StartTime).Seconds(), commandInfo{
+	err := commandCleanRun(cmd, time.Since(global.StartTime).Seconds(), commandInfo{
 		Queue:   configs.Queue{},
 		CmdSeq:  0,
 		ExecDir: "configs/topology",
@@ -412,7 +406,7 @@ func NodeDelete(nodes node) {
 }
 
 func (nodes node) Create(execTime float64, info commandInfo) {
-	var optionInput = &configs.Option[[]byte]{}
+	var optionInput = &utils.Option[[]byte]{}
 	for _, node := range nodes {
 		nodeName, err := node.GetName()
 		if err != nil {
@@ -430,13 +424,13 @@ func (nodes node) Create(execTime float64, info commandInfo) {
 		for range replicas {
 			nodeMutex.Lock()
 			currentIndex := node.GetCurrentIndex()
-			fileReplace(nodeConfName, nodeName, nodeName+"-"+strconv.Itoa(currentIndex), *optionInput)
+			utils.FileReplace(nodeConfName, nodeName, nodeName+"-"+strconv.Itoa(currentIndex), *optionInput)
 			KubectlApply(path.Base(nodeConfName), execTime, info)
 			node.SetCurrentIndex(currentIndex + 1)
 			nodeMutex.Unlock()
 		}
 		// Just restores input (the initial file)
-		fileReplace(nodeConfName, "", "", *optionInput)
+		utils.FileReplace(nodeConfName, "", "", *optionInput)
 	}
 }
 
@@ -529,10 +523,9 @@ func fixArgs(args []string) []string {
 }
 
 func errLog(err string, s string) {
-	configs.ErrLog(err, s)
+	writers.ErrLog(err, s)
 }
 
 func crashLog(err string) {
-	KwokctlDelete()
-	configs.CrashLog(err)
+	writers.CrashLog(err, KwokctlDelete)
 }
