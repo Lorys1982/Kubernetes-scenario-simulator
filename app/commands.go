@@ -25,6 +25,7 @@ var logChannelStd = writers.LogChannelStd
 var logChannelErr = writers.LogChannelErr
 var crashLock sync.Mutex
 var crashBool = false
+var clusterUp = false
 
 type kube configs.Kube
 type node []configs.Node
@@ -40,6 +41,7 @@ type Operations interface {
 	Scale(float64, commandInfo)
 }
 
+// TODO add information about the context for the choice of the cluster
 type commandInfo struct {
 	Queue   configs.Queue
 	CmdSeq  int
@@ -223,12 +225,14 @@ func execWrapper(fullCmd []string, cfg configs.Command, info commandInfo) {
 	}
 }
 
-func ConcurrentQueueRun(queues []configs.Queue) {
+func ConcurrentQueueRun(clusterQueues [][]configs.Queue) {
 	var wgQueues sync.WaitGroup
 	global.StartTime = time.Now()
-	for _, queue := range queues {
-		wgQueues.Add(1)
-		go ConcurrentCommandsRun(queue, &wgQueues)
+	for _, queues := range clusterQueues {
+		for _, queue := range queues {
+			wgQueues.Add(1)
+			go ConcurrentCommandsRun(queue, &wgQueues)
+		}
 	}
 	wgQueues.Wait()
 }
@@ -239,26 +243,27 @@ func ConcurrentCommandsRun(queue configs.Queue, wgQueues *sync.WaitGroup) {
 	sort.Slice(cmds, func(i, j int) bool {
 		return cmds[j].Time > cmds[i].Time
 	})
-	for _, cfg := range cmds {
+	for _, cmdSpecs := range cmds {
 		wgCommands.Add(1)
-		cfg.Command = strings.ToLower(cfg.Command)
-		if cfg.Exec != "" { // User sent a complete command
-			fullCmd := strings.Split(cfg.Exec, " ")
+		cmdSpecs.Command = strings.ToLower(cmdSpecs.Command)
+		if cmdSpecs.Context != "" {
+			queue.KubeContext.Name = cmdSpecs.Context
+		}
+		if cmdSpecs.Exec != "" { // User sent a complete command
+			fullCmd := strings.Split(cmdSpecs.Exec, " ")
 			if !CommandExists(fullCmd[0]) {
 				crashLog(fmt.Sprintf("Command %s does not exist", fullCmd[0]))
 			}
-			if queue.Kubeconfig != "" {
-				fullCmd = append(fullCmd, "--kubeconfig", queue.Kubeconfig)
-			}
+			fullCmd = append(fullCmd, "--kubeconfig", queue.Kubeconfig, "--context", queue.KubeContext.Name)
 			cmd := exec.Command(fullCmd[0], fullCmd[1:]...)
 			cmd.Dir = "configs/command_configs"
-			go concurrentCommandRun(cmd, cfg, &wgCommands, queue)
-		} else if cfg.Command != "" { // user sent a wrapped command
-			fullCmd := strings.Split(cfg.Command, " ")
+			go concurrentCommandRun(cmd, cmdSpecs, &wgCommands, queue)
+		} else if cmdSpecs.Command != "" { // user sent a wrapped command
+			fullCmd := strings.Split(cmdSpecs.Command, " ")
 			if queue.Kubeconfig != "" {
-				fullCmd = append(fullCmd, "--kubeconfig", queue.Kubeconfig)
+				fullCmd = append(fullCmd, "--kubeconfig", queue.Kubeconfig, "--context", queue.KubeContext.Name)
 			}
-			go concurrentExecWrapper(fullCmd, cfg, &wgCommands, queue)
+			go concurrentExecWrapper(fullCmd, cmdSpecs, &wgCommands, queue)
 		} else {
 			crashLog("Invalid Command/Exec")
 		}
@@ -273,62 +278,81 @@ func ConcurrentCommandsRun(queue configs.Queue, wgQueues *sync.WaitGroup) {
 //
 //	false -> cluster deletion
 //	true -> cluster creation
-func clusterArgs(selector bool) []string {
-	var command []string
+func clusterArgs(selector bool) [][]string {
+	var command [][]string
+	clusters := configs.GetClusterName()
+	kwokConf := configs.GetKwokConf()
+	auditConf := configs.GetAuditConf()
+
 	if selector {
-		command = []string{"create", "cluster"}
+		for range clusters {
+			command = append(command, []string{"create", "cluster"})
+		}
 	} else {
-		command = []string{"delete", "cluster"}
-	}
-
-	if configs.GetClusterName() != "" {
-		command = append(command, "--name", configs.GetClusterName())
-	}
-
-	if selector && len(configs.GetKwokConf()) != 0 {
-		for _, kconf := range configs.GetKwokConf() {
-			command = append(command, "--config", kconf)
+		for range clusters {
+			command = append(command, []string{"delete", "cluster"})
 		}
 	}
 
-	if selector && configs.GetAuditConf() != "" {
-		command = append(command, "--kube-audit-policy", configs.GetAuditConf())
+	for i := range clusters {
+		if clusters[i] != "" {
+			command[i] = append(command[i], "--name", clusters[i])
+		}
+
+		if selector && len(kwokConf) != 0 {
+			for _, kconf := range kwokConf[i] {
+				command[i] = append(command[i], "--config", kconf)
+			}
+		}
+
+		if selector && auditConf[i] != "" {
+			command[i] = append(command[i], "--kube-audit-policy", auditConf[i])
+		}
 	}
 
 	return command
 }
 
-func KwokctlCreate() {
+func KwokctlCreateAll() {
 	args := clusterArgs(true)
 
-	cmd := exec.Command("kwokctl", args...)
-	err := commandRun(cmd, 0, commandInfo{
-		Queue:   configs.Queue{},
-		CmdSeq:  0,
-		ExecDir: "configs/topology",
-	})
-	if err != nil {
-		crashLog(err.Error())
+	for i := range args {
+		cmd := exec.Command("kwokctl", args[i]...)
+		err := commandRun(cmd, 0, commandInfo{
+			Queue: configs.Queue{
+				Name: "Kwokctl",
+			},
+			CmdSeq:  0,
+			ExecDir: "configs/topology",
+		})
+		if err != nil {
+			crashLog(err.Error())
+		}
+		clusterUp = true
 	}
 }
 
-func KwokctlDelete() {
+func KwokctlDeleteAll() {
+	clusters := configs.GetClusterName()
 	args := clusterArgs(false)
 	home, _ := os.UserHomeDir()
 
 	crashHalt(false)
+	for i := range args {
+		// Copy and compress log file
+		utils.Compress("audit.log", path.Join(home, ".kwok/clusters", clusters[i], "logs"), i)
 
-	// Copy and compress log file
-	utils.Compress("audit.log", path.Join(home, ".kwok/clusters", configs.GetClusterName(), "logs"))
-
-	cmd := exec.Command("kwokctl", args...)
-	err := commandCleanRun(cmd, time.Since(global.StartTime).Seconds(), commandInfo{
-		Queue:   configs.Queue{},
-		CmdSeq:  0,
-		ExecDir: "configs/topology",
-	})
-	if err != nil {
-		return
+		cmd := exec.Command("kwokctl", args[i]...)
+		err := commandCleanRun(cmd, time.Since(global.StartTime).Seconds(), commandInfo{
+			Queue: configs.Queue{
+				Name: "Kwokctl",
+			},
+			CmdSeq:  0,
+			ExecDir: "configs/topology",
+		})
+		if err != nil {
+			return
+		}
 	}
 }
 
@@ -389,17 +413,23 @@ func kubectScale(replicas int, execTime float64, info commandInfo, cmdArgs ...st
 	_ = commandRun(cmd, execTime, info)
 }
 
-func NodeCreate(nodes node) {
+func NodeCreate(nodes node, clusterIndex int) {
 	nodes.Create(0, commandInfo{
-		Queue:   configs.Queue{},
+		Queue: configs.Queue{
+			Name:        "Topology",
+			KubeContext: configs.DefaultKubeContext.Contexts[clusterIndex],
+		},
 		CmdSeq:  0,
 		ExecDir: "configs/topology",
 	})
 }
 
-func NodeDelete(nodes node) {
+func NodeDelete(nodes node, clusterIndex int) {
 	nodes.Delete(0, commandInfo{
-		Queue:   configs.Queue{},
+		Queue: configs.Queue{
+			Name:        "Topology",
+			KubeContext: configs.DefaultKubeContext.Contexts[clusterIndex],
+		},
 		CmdSeq:  0,
 		ExecDir: "configs/topology",
 	})
@@ -527,5 +557,9 @@ func errLog(err string, s string) {
 }
 
 func crashLog(err string) {
-	writers.CrashLog(err, KwokctlDelete)
+	if clusterUp {
+		writers.CrashLog(err, KwokctlDeleteAll)
+	} else {
+		writers.CrashLog(err)
+	}
 }

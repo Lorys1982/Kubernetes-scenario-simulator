@@ -29,14 +29,21 @@ func Simulation() {
 	go writers.BufferErrWriter()
 
 	// Cluster Creation
-	KwokctlCreate()
+	KwokctlCreateAll()
 
-	// node Creation
-	NodeCreate(configs.GetNodesConf())
+	// Fill kubeconf structs
+	configs.ConfPostprocess()
+
+	// node Creation per cluster
+	clusters := configs.GetClusterName()
+	for i := range clusters {
+		nodes := configs.GetNodesConf()[i]
+		NodeCreate(nodes, i)
+	}
 
 	// Executes the commands with the specified delay
 	ConcurrentQueueRun(configs.GetQueues())
 
 	// Cluster Deletion
-	KwokctlDelete()
+	KwokctlDeleteAll()
 }

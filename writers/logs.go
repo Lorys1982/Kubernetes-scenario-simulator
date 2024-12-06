@@ -43,7 +43,7 @@ func CrashLog(err string, option ...func()) {
 	errLog := log.New(&buffer, "[Fatal Error] ", log.Ltime|log.Lmicroseconds)
 	errLog.Printf(err + "\n\n")
 
-	if global.ConfName == "" {
+	if global.ConfName == nil {
 		errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr_%s.log", global.ConfName, global.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 		errFile.Write(buffer.Bytes())
 		log.Fatal(buffer.String())
@@ -51,7 +51,7 @@ func CrashLog(err string, option ...func()) {
 		LogChannelErr <- buffer.Bytes()
 	}
 
-	if option[0] != nil {
+	if option != nil {
 		f := option[0]
 		f()
 	}

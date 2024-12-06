@@ -50,14 +50,14 @@ func FileReplace(fileName string, toReplace string, replace string, input Option
 // # Result
 //
 // The compressed file will be a .gz
-func Compress(fileName string, filepath string) {
+func Compress(fileName string, filepath string, clusterIndex int) {
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 	workingDir, _ := os.Getwd()
 
 	inFile := path.Join(filepath, fileName)
 	input, _ := os.ReadFile(inFile)
-	fileName = global.ConfName + "_" + global.LogTime + ".gz"
+	fileName = global.ConfName[clusterIndex] + "_" + global.LogTime + ".gz"
 
 	outFile := path.Join(workingDir, "logs", fileName)
 	newFile, _ := os.Create(outFile)
