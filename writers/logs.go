@@ -14,26 +14,30 @@ var killChannelErr = make(chan bool)
 
 func BufferOutWriter() {
 	var toWrite []byte
-	outFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdOut_%s.log", global.ConfName, global.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	defer outFile.Close()
+	var outFiles []*os.File
+	for i, cluster := range global.ClusterNames {
+		outFiles[i], _ = os.OpenFile(fmt.Sprintf("logs/%s/%s_StdOut_%s.log", cluster, global.ConfName, global.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	}
 	for {
 		select {
 		case toWrite = <-LogChannelStd:
-			outFile.Write(toWrite)
+			outFiles.Write(toWrite)
 		}
 	}
 }
 
 func BufferErrWriter() {
 	var toWrite []byte
-	errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr_%s.log", global.ConfName, global.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
-	defer errFile.Close()
+	var errFiles []*os.File
+	for i, cluster := range global.ClusterNames {
+		errFiles[i], _ = os.OpenFile(fmt.Sprintf("logs/%s/%s_StdErr_%s.log", cluster, global.ConfName, global.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	}
 	for {
 		select {
 		case <-killChannelErr:
 			return
 		case toWrite = <-LogChannelErr:
-			errFile.Write(toWrite)
+			errFiles.Write(toWrite)
 		}
 	}
 }

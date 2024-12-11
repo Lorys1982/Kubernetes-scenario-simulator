@@ -72,3 +72,8 @@ func Compress(fileName string, filepath string, clusterIndex int) {
 	}
 	defer newFile.Close()
 }
+
+func CleanLogs() {
+	os.RemoveAll("./logs/")
+	os.MkdirAll("./logs", os.ModePerm)
+}

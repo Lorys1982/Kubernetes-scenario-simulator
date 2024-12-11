@@ -1,10 +1,12 @@
 package app
 
 import (
+	"fmt"
 	"log"
 	"main/configs"
 	"main/global"
 	"main/writers"
+	"os"
 )
 
 // Simulation function
@@ -15,6 +17,10 @@ import (
 func Simulation() {
 	configs.NewConfig()
 	global.ConfName = configs.GetCommandsConfName()
+	global.ClusterNames = configs.GetClusterName()
+	for _, cluster := range global.ClusterNames {
+		os.MkdirAll(fmt.Sprintf("logs/%s", cluster), os.ModePerm)
+	}
 
 	// checks if kwokctl and kubectl is installed
 	if !CommandExists("kwokctl") {
