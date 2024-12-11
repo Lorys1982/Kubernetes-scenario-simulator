@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/goaux/decowriter"
+	"github.com/notEpsilon/go-pair"
 	"io"
 	"log"
 	"main/configs"
@@ -125,8 +126,8 @@ func commandRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
 	outLog.Printf("Executed at Time: %f Seconds\n\n", execTime)
 	errLog.Printf("Executed at Time: %f Seconds\n\n", execTime)
 
-	logChannelStd <- stdBuff.Bytes()
-	logChannelErr <- errBuff.Bytes()
+	logChannelStd <- *pair.New(stdBuff.Bytes(), info.Queue.KubeContext.ClusterIndex)
+	logChannelErr <- *pair.New(errBuff.Bytes(), info.Queue.KubeContext.ClusterIndex)
 
 	return cmdErr
 }
@@ -162,8 +163,8 @@ func commandCleanRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
 	outLog.Printf("Executed at Time: %f Seconds\n\n", execTime)
 	errLog.Printf("Executed at Time: %f Seconds\n\n", execTime)
 
-	logChannelStd <- stdBuff.Bytes()
-	logChannelErr <- errBuff.Bytes()
+	logChannelStd <- *pair.New(stdBuff.Bytes(), info.Queue.KubeContext.ClusterIndex)
+	logChannelErr <- *pair.New(errBuff.Bytes(), info.Queue.KubeContext.ClusterIndex)
 
 	return cmdErr
 }
@@ -552,14 +553,14 @@ func fixArgs(args []string) []string {
 	return rArgs
 }
 
-func errLog(err string, s string) {
-	writers.ErrLog(err, s)
+func errLog(err string, s string, info commandInfo) {
+	writers.ErrLog(err, s, info.Queue.KubeContext.ClusterIndex)
 }
 
-func crashLog(err string) {
+func crashLog(err string, info commandInfo) {
 	if clusterUp {
-		writers.CrashLog(err, KwokctlDeleteAll)
+		writers.CrashLog(err, info.Queue.KubeContext.ClusterIndex, KwokctlDeleteAll)
 	} else {
-		writers.CrashLog(err)
+		writers.CrashLog(err, info.Queue.KubeContext.ClusterIndex)
 	}
 }

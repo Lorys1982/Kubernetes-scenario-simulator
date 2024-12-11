@@ -22,8 +22,9 @@ type KubeContexts struct {
 }
 
 type Context struct {
-	ContextInfo ContextInfo `yaml:"context"`
-	Name        string      `yaml:"name"`
+	ContextInfo  ContextInfo `yaml:"context"`
+	Name         string      `yaml:"name"`
+	ClusterIndex int
 }
 
 type ContextInfo struct {
@@ -329,6 +330,7 @@ func ConfPostprocess() {
 	for i := range commandsConf {
 		for j := range commandsConf[i].Spec.Queues {
 			currentKubeconf := GenContexts(commandsConf[i].Spec.Queues[j].Kubeconfig)
+			commandsConf[i].Spec.Queues[j].KubeContext.ClusterIndex = i
 			for k, context := range currentKubeconf.Contexts {
 				if clusters[i] == context.ContextInfo.Cluster {
 					commandsConf[i].Spec.Queues[j].KubeContext = currentKubeconf.Contexts[k]
