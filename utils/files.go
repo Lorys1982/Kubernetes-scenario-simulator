@@ -59,7 +59,7 @@ func Compress(fileName string, filepath string, clusterIndex int) {
 	input, _ := os.ReadFile(inFile)
 	fileName = global.ConfName[clusterIndex] + "_" + global.LogTime + ".gz"
 
-	outFile := path.Join(workingDir, "logs", fileName)
+	outFile := path.Join(workingDir, "logs", global.ClusterNames[clusterIndex], fileName)
 	newFile, _ := os.Create(outFile)
 	compressor := gzip.NewWriter(newFile)
 	_, err := compressor.Write(input)

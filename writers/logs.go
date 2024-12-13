@@ -14,33 +14,31 @@ var LogChannelErr = make(chan pair.Pair[[]byte, int])
 var killChannelErr = make(chan bool)
 
 func BufferOutWriter() {
-	var toWrite []byte
-	var clusterIndex int
-	var outFiles []*os.File
+	var pairs pair.Pair[[]byte, int]
+	var outFiles = make([]*os.File, len(global.ClusterNames))
 	for i, cluster := range global.ClusterNames {
-		outFiles[i], _ = os.OpenFile(fmt.Sprintf("logs/%s/%s_StdOut_%s.log", cluster, global.ConfName, global.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+		outFiles[i], _ = os.OpenFile(fmt.Sprintf("logs/%s/%s_StdOut_%s.log", cluster, global.ConfName[i], global.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 	}
 	for {
 		select {
-		case toWrite, clusterIndex = <-LogChannelStd:
-			outFiles[clusterIndex].Write(toWrite)
+		case pairs = <-LogChannelStd:
+			outFiles[pairs.Second].Write(pairs.First)
 		}
 	}
 }
 
 func BufferErrWriter() {
-	var toWrite []byte
-	var clusterIndex int
-	var errFiles []*os.File
+	var pairs pair.Pair[[]byte, int]
+	var errFiles = make([]*os.File, len(global.ClusterNames))
 	for i, cluster := range global.ClusterNames {
-		errFiles[i], _ = os.OpenFile(fmt.Sprintf("logs/%s/%s_StdErr_%s.log", cluster, global.ConfName, global.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+		errFiles[i], _ = os.OpenFile(fmt.Sprintf("logs/%s/%s_StdErr_%s.log", cluster, global.ConfName[i], global.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 	}
 	for {
 		select {
 		case <-killChannelErr:
 			return
-		case toWrite, clusterIndex = <-LogChannelErr:
-			errFiles[clusterIndex].Write(toWrite)
+		case pairs = <-LogChannelErr:
+			errFiles[pairs.Second].Write(pairs.First)
 		}
 	}
 }
@@ -54,6 +52,10 @@ func CrashLog(err string, clusterIndex int, option ...func()) {
 		errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr_%s.log", global.ConfName, global.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 		errFile.Write(buffer.Bytes())
 		log.Fatal(buffer.String())
+	} else if clusterIndex == -1 {
+		for i := range global.ClusterNames {
+			LogChannelErr <- *pair.New(buffer.Bytes(), i)
+		}
 	} else {
 		LogChannelErr <- *pair.New(buffer.Bytes(), clusterIndex)
 	}
@@ -71,4 +73,8 @@ func ErrLog(err string, cmd string, clusterIndex int) {
 	errLog := log.New(&buffer, "[Error] ", log.Ltime|log.Lmicroseconds)
 	errLog.Printf("(Command: %s) %s\n\n", cmd, err)
 	LogChannelErr <- *pair.New(buffer.Bytes(), clusterIndex)
+}
+
+func KillLoggers() {
+	killChannelErr <- true
 }
