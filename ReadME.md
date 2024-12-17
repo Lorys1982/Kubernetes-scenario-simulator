@@ -123,7 +123,7 @@ They will be automatically generated on [**_Initialization,_**](#run-on-linux) a
 ### SimConfiguration
 
 **Just one** of this configs file can exist at a time.  
-This configuration manages the cluster's topology, it is used to set up the Kwok cluster specifying **nodes**,
+This configuration manages the cluster's topology, it is used to set up one or more Kwok clusters specifying **nodes**,
 **cluster configs**, like audit policies and custom components, and it contains the name of the **Scenario configs.**
 
 **Location:** `./configs/config.yaml`
@@ -150,7 +150,7 @@ This configuration manages the cluster's topology, it is used to set up the Kwok
 **Multiple** of these config files can exist at a time. 
 This configuration manages the scenario you want to reproduce, it supports multiple **simultaneous queues** to simulate
 different users, each with its own **kubeconfig** and **commands sequence** which will execute at a given **time**
-from the start of the simulation.
+and in a specified cluster **context** from the start of the simulation.
 
 **Location:** `./configs/command_configs/config.yaml` (Note that the config name is **variable**)
 
