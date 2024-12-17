@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"main/app"
+	"main/utils"
 	"os"
 )
 
@@ -20,6 +21,8 @@ func main() {
 		app.Init()
 	} else if argsWithoutProg[0] == "--start" || argsWithoutProg[0] == "-s" { // Simulation start
 		app.Simulation()
+	} else if argsWithoutProg[0] == "--clean-logs" || argsWithoutProg[0] == "-c" { // Delete all logs
+		utils.CleanLogs()
 	} else { // wrong args provided
 		fmt.Println("Unknown argument: " + argsWithoutProg[0])
 	}

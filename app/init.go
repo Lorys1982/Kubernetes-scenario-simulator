@@ -34,18 +34,36 @@ func Init() {
 			defer file.Close()
 			enc := yaml.NewEncoder(file)
 			err = enc.Encode(configs.Config{
-				ClusterName: "",
-				KwokConfigs: []string{
-					"",
-				},
-				Nodes: []configs.Node{
+				Clusters: []configs.Cluster{
 					{
-						ConfigName: "example.yaml",
-						Count:      0,
+						ClusterName: "Cluster1",
+						KwokConfigs: []string{
+							"",
+						},
+						Nodes: []configs.Node{
+							{
+								ConfigName: "example.yaml",
+								Count:      0,
+							},
+						},
+						Audit:    "",
+						Commands: "config.yaml",
+					},
+					{
+						ClusterName: "Cluster2",
+						KwokConfigs: []string{
+							"",
+						},
+						Nodes: []configs.Node{
+							{
+								ConfigName: "example.yaml",
+								Count:      0,
+							},
+						},
+						Audit:    "",
+						Commands: "config.yaml",
 					},
 				},
-				Audit:    "",
-				Commands: "config.yaml",
 			})
 			if err != nil {
 				log.Fatal(err)
@@ -78,8 +96,9 @@ func Init() {
 							Kubeconfig: "",
 							Sequence: []configs.Command{
 								{
-									Exec: "<command>",
-									Time: 0,
+									Exec:    "<command>",
+									Time:    0,
+									Context: "<context-name>",
 								},
 								{
 									Command:  "<wrapper command>",
@@ -89,6 +108,7 @@ func Init() {
 									Args: []string{
 										"<args1>",
 									},
+									Context: "<context-name>",
 								},
 							},
 						},

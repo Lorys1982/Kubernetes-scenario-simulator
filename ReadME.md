@@ -53,15 +53,16 @@ nano config.yaml # or: whatever other text editor
 > ```yaml
 > apiVersion: k8s-sim.fbk.eu/v1alpha1
 > kind: SimConfiguration
-> clusterName: "<cluster-name>" # The name of the cluster
-> kwokConfigs: # The configs to give to kwokctl (for example the configs for a custom scheduler)
->   - "<conf1.yaml>"
->   - "<conf2.yaml>"
-> nodes: # The nodes that you want in the topology
->   - name: "<node-conf.yaml>" # The config file for the node
->     count: int # the number of nodes you want
-> auditLoggingConfig: "<audit-conf.yaml>" # the audit log config file (same as standard k8s)
-> commandsConfig: "<config.yaml>" # The name of the scenario simulation config file, it is config.yaml by default
+> clusters: # List of clusters to provision
+>   - clusterName: "<cluster-name>" # The name of the cluster
+>     kwokConfigs: # The configs to give to kwokctl (for example the configs for a custom scheduler)
+>       - "<conf1.yaml>"
+>       - "<conf2.yaml>"
+>     nodes: # The nodes that you want in the topology
+>       - name: "<node-conf.yaml>" # The config file for the node
+>         count: int # the number of nodes you want
+>     auditLoggingConfig: "<audit-conf.yaml>" # the audit log config file (same as standard k8s)
+>     commandsConfig: "<config.yaml>" # The name of the scenario simulation config file, it is config.yaml by default
 > ```
 > Make sure to put all the configs written in this config file inside the `./configs/topology` **directory**
 
@@ -89,12 +90,14 @@ nano config.yaml # or: whatever other text editor
 >       # Use exec and command keywords separately
 >     - exec: <command> # Exec will execute the complete command you provide with no interference from the simulator
 >       time: 0 # The absolute time (from the start of the simulation) to which run the command
+>       context: "<context-name>" # [Optional] The name of the context in which to run the command
 >     - command: <resource action> # Command is a wrapper command
 >       time: 0
 >       filename: <filename> # If the command requires a file put it here
 >       count: 1 # If the command requires a count put it here
 >       args: # If the command requires additional arguments put them here
 >         - "<arg1>"
+>       context: "<context-name>"
 > ```
 > Make sure to put every config written in this file inside the `./configs/command_configs` directory
 
@@ -120,7 +123,7 @@ They will be automatically generated on [**_Initialization,_**](#run-on-linux) a
 ### SimConfiguration
 
 **Just one** of this configs file can exist at a time.  
-This configuration manages the cluster's topology, it is used to set up the Kwok cluster specifying **nodes**,
+This configuration manages the cluster's topology, it is used to set up one or more Kwok clusters specifying **nodes**,
 **cluster configs**, like audit policies and custom components, and it contains the name of the **Scenario configs.**
 
 **Location:** `./configs/config.yaml`
@@ -128,15 +131,16 @@ This configuration manages the cluster's topology, it is used to set up the Kwok
 #### Fields
 - **apiVersion [string]:** Version of the Simulator api
 - **kind [string]:** The type of object you are specifying (`SimConfiguration`)
-- **clusterName [string]:** Name of the kwok cluster, mainly introduced to match the name inside kwok configs
-- **kwokConfigs [string list]:** List of config files (.yaml) applicable to kwok cluster creation 
-- **nodes [nodes list]:** List of nodes, each composed of _name_ and _count_
-  - **filename [string]:** Configuration file name of the node to deploy
-  - **count [int]:** How many nodes to replicate
-- **auditLoggingPolicy [string]:** Config file of the audit policy (it's the same as standard k8s)
-- **commandsConfigs [string]:** Scenario config file, defaults to `config.yaml` but it's customizable if you want
-to create multiple scenario configs, as long as they are structured correctly and in the `./configs/command_configs` 
-directory
+- **clusters [cluster list]:** List of clusters, each with its own `SimCommandsConfiguration`
+  - **clusterName [string]:** Name of the kwok cluster, mainly introduced to match the name inside kwok configs
+  - **kwokConfigs [string list]:** List of config files (.yaml) applicable to kwok cluster creation 
+  - **nodes [nodes list]:** List of nodes, each composed of _name_ and _count_
+    - **filename [string]:** Configuration file name of the node to deploy
+    - **count [int]:** How many nodes to replicate
+  - **auditLoggingPolicy [string]:** Config file of the audit policy (it's the same as standard k8s)
+  - **commandsConfigs [string]:** Scenario config file, defaults to `config.yaml` but it's customizable if you want
+  to create multiple scenario configs, as long as they are structured correctly and in the `./configs/command_configs` 
+  directory
 
 > [!NOTE]
 > Nodes will be explained better below [(Jump)](#nodes)
@@ -146,7 +150,7 @@ directory
 **Multiple** of these config files can exist at a time. 
 This configuration manages the scenario you want to reproduce, it supports multiple **simultaneous queues** to simulate
 different users, each with its own **kubeconfig** and **commands sequence** which will execute at a given **time**
-from the start of the simulation.
+and in a specified cluster **context** from the start of the simulation.
 
 **Location:** `./configs/command_configs/config.yaml` (Note that the config name is **variable**)
 
@@ -175,6 +179,8 @@ from the start of the simulation.
 - **filename [string]:** If the command requires a file, it can be written here
 - **count [int]:** If the command requires a count, it can be written here
 - **args [string list]:** If the command requires arguments, they can be listed here
+- **context [Optional] [string]:** The context into which run the command, if not specified the command will be run
+in the first available context of the given `kubeconfig` file, relative to the `SimCommandsConfig` cluster.
 
 ### Nodes
 
