@@ -96,8 +96,9 @@ func Init() {
 							Kubeconfig: "",
 							Sequence: []configs.Command{
 								{
-									Exec: "<command>",
-									Time: 0,
+									Exec:    "<command>",
+									Time:    0,
+									Context: "<context-name>",
 								},
 								{
 									Command:  "<wrapper command>",
@@ -107,6 +108,7 @@ func Init() {
 									Args: []string{
 										"<args1>",
 									},
+									Context: "<context-name>",
 								},
 							},
 						},
