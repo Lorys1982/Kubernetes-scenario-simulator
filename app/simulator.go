@@ -29,6 +29,9 @@ func Simulation() {
 	if !CommandExists("kubectl") {
 		log.Fatal("kubectl not installed")
 	}
+	if !CommandExists("liqoctl") {
+		log.Fatal("liqoctl not installed")
+	}
 
 	// Logger Initialization
 	go writers.BufferOutWriter()

@@ -205,7 +205,7 @@ func GetClusterName() []string {
 	return clusterName
 }
 
-// GetClusterNameKubeconf returns the cluster's name in te kubeconfig
+// GetClusterNameKubeconf returns the cluster's name in the kubeconfig
 func GetClusterNameKubeconf() []string {
 	clusterName := make([]string, len(conf.Clusters))
 	for i := range conf.Clusters {
