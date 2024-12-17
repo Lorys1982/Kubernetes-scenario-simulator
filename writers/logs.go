@@ -6,6 +6,7 @@ import (
 	"github.com/notEpsilon/go-pair"
 	"log"
 	"main/global"
+	"main/utils"
 	"os"
 )
 
@@ -43,36 +44,38 @@ func BufferErrWriter() {
 	}
 }
 
-func CrashLog(err string, clusterIndex int, option ...func()) {
+func CrashLog(err string, info utils.Option[global.LogCommandInfo], option ...func()) {
 	var buffer bytes.Buffer
-	errLog := log.New(&buffer, "[Fatal Error] ", log.Ltime|log.Lmicroseconds)
-	errLog.Printf(err + "\n\n")
 
 	if global.ConfName == nil {
 		errFile, _ := os.OpenFile(fmt.Sprintf("logs/%s_StdErr_%s.log", global.ConfName, global.LogTime), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 		errFile.Write(buffer.Bytes())
 		log.Fatal(buffer.String())
-	} else if clusterIndex == -1 {
+	} else if info.IsNone() {
+		errLog := log.New(&buffer, "[Fatal Error] ", log.Ltime|log.Lmicroseconds)
+		errLog.Printf(err + "\n\n")
 		for i := range global.ClusterNames {
 			LogChannelErr <- *pair.New(buffer.Bytes(), i)
 		}
 	} else {
-		LogChannelErr <- *pair.New(buffer.Bytes(), clusterIndex)
+		info := info.GetSome()
+		errLog := log.New(&buffer, fmt.Sprintf("[Fatal Error][Queue: %s][Command #%d] ", info.QueueName, info.CmdIndex), log.Ltime|log.Lmicroseconds)
+		errLog.Printf(err + "\n\n")
+		LogChannelErr <- *pair.New(buffer.Bytes(), info.ClusterIndex)
 	}
 
 	if option != nil {
 		f := option[0]
 		f()
 	}
-	killChannelErr <- true
 	log.Fatal(buffer.String())
 }
 
-func ErrLog(err string, cmd string, clusterIndex int) {
+func ErrLog(err string, cmd string, info global.LogCommandInfo) {
 	var buffer bytes.Buffer
-	errLog := log.New(&buffer, "[Error] ", log.Ltime|log.Lmicroseconds)
+	errLog := log.New(&buffer, fmt.Sprintf("[Error][Queue: %s][Command #%d] ", info.QueueName, info.CmdIndex), log.Ltime|log.Lmicroseconds)
 	errLog.Printf("(Command: %s) %s\n\n", cmd, err)
-	LogChannelErr <- *pair.New(buffer.Bytes(), clusterIndex)
+	LogChannelErr <- *pair.New(buffer.Bytes(), info.ClusterIndex)
 }
 
 func KillLoggers() {

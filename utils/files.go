@@ -33,7 +33,7 @@ func FileReplace(fileName string, toReplace string, replace string, input Option
 		if err != nil {
 			log.Fatalln(err.Error())
 		}
-		input.Some(res)
+		input = Some(res)
 	}
 
 	output := strings.Replace(string(input.GetSome()), toReplace, replace, 1)
