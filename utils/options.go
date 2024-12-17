@@ -13,25 +13,19 @@ func (o *Option[T]) IsNone() bool {
 func (o *Option[T]) IsSome() bool {
 	return !o.none
 }
-func (o *Option[T]) None() { o.none = true } // None sets the Option object to none
-func (o *Option[T]) Some(data T) {
-	o.none = false
-	o.some = data
-} // Some sets the Option object to some, filling it with data
 func (o *Option[T]) GetSome() T {
 	return o.some
 }
 
-func Some(data any) Option[any] {
-	return Option[any]{
+func Some[T any](data T) Option[T] {
+	return Option[T]{
 		none: false,
 		some: data,
 	}
 }
 
-func None() Option[any] {
-	return Option[any]{
+func None[T any]() Option[T] {
+	return Option[T]{
 		none: true,
-		some: nil,
 	}
 }
