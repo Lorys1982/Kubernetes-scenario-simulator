@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -114,6 +115,10 @@ func commandRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
 	_ = cmd.Start()
 	cmdErr := cmd.Wait()
 
+	r := regexp.MustCompile("(\\r *\\r)*|(\\n *\\n)*")
+	stdBuff = *bytes.NewBuffer(r.ReplaceAll(stdBuff.Bytes(), []byte("")))
+	errBuff = *bytes.NewBuffer(r.ReplaceAll(errBuff.Bytes(), []byte("")))
+
 	outLog.SetPrefix(fmt.Sprintf("[Queue: %s][Command #%d End] ", info.Queue.Name, info.CmdIndex))
 	errLog.SetPrefix(fmt.Sprintf("[Queue: %s][Command #%d End] ", info.Queue.Name, info.CmdIndex))
 	outLog.Printf("Executed at Time: %f Seconds\n\n", execTime)
@@ -150,6 +155,10 @@ func commandCleanRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
 
 	_ = cmd.Start()
 	cmdErr := cmd.Wait()
+
+	r := regexp.MustCompile("(\\r *\\r)*|(\\n *\\n)*")
+	stdBuff = *bytes.NewBuffer(r.ReplaceAll(stdBuff.Bytes(), []byte("")))
+	errBuff = *bytes.NewBuffer(r.ReplaceAll(errBuff.Bytes(), []byte("")))
 
 	outLog.SetPrefix(fmt.Sprintf("[Queue: %s][Command #%d End] ", info.Queue.Name, info.CmdIndex))
 	errLog.SetPrefix(fmt.Sprintf("[Queue: %s][Command #%d End] ", info.Queue.Name, info.CmdIndex))
@@ -277,9 +286,10 @@ func ConcurrentCommandsRun(queue configs.Queue, wgQueues *sync.WaitGroup) {
 //	true -> cluster creation
 func clusterArgs(selector bool) [][]string {
 	var command [][]string
-	clusters := configs.GetClusterName()
+	clusters := configs.GetClusterNames()
 	kwokConf := configs.GetKwokConf()
 	auditConf := configs.GetAuditConf()
+	liqo := configs.GetLiqoConf()
 
 	if selector {
 		for range clusters {
@@ -304,6 +314,9 @@ func clusterArgs(selector bool) [][]string {
 
 		if selector && auditConf[i] != "" {
 			command[i] = append(command[i], "--kube-audit-policy", auditConf[i])
+		}
+		if selector && liqo {
+			command[i] = append(command[i], "--runtime", "kind")
 		}
 	}
 
@@ -335,7 +348,7 @@ func KwokctlCreateAll() {
 func KwokctlDeleteAll() {
 	wg := sync.WaitGroup{}
 	args := clusterArgs(false)
-	clusters := configs.GetClusterName()
+	clusters := configs.GetClusterNames()
 	crashHalt(false)
 	for i := range args {
 		wg.Add(1)
@@ -412,6 +425,26 @@ func kubectScale(replicas int, execTime float64, info commandInfo, cmdArgs ...st
 	args := []string{"scale"}
 	args = append(args, cmdArgs...)
 	args = append(args, "--replicas", strconv.Itoa(replicas))
+	args = append(args, "--kubeconfig", info.Queue.Kubeconfig)
+	args = append(args, "--context", info.Queue.KubeContext.Name)
+
+	cmd := exec.Command("kubectl", args...)
+	_ = commandRun(cmd, execTime, info)
+}
+
+func KubectlCordon(execTime float64, info commandInfo, cmdArgs ...string) {
+	args := []string{"cordon"}
+	args = append(args, cmdArgs...)
+	args = append(args, "--kubeconfig", info.Queue.Kubeconfig)
+	args = append(args, "--context", info.Queue.KubeContext.Name)
+
+	cmd := exec.Command("kubectl", args...)
+	_ = commandRun(cmd, execTime, info)
+}
+
+func KubectlUncordon(execTime float64, info commandInfo, cmdArgs ...string) {
+	args := []string{"uncordon"}
+	args = append(args, cmdArgs...)
 	args = append(args, "--kubeconfig", info.Queue.Kubeconfig)
 	args = append(args, "--context", info.Queue.KubeContext.Name)
 
