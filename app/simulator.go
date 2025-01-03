@@ -43,9 +43,11 @@ func Simulation() {
 	// Fill kubeconf structs
 	configs.ConfPostprocess()
 
-	// If liqo flag is set, install liqo in all clusters
-	if configs.GetLiqoConf() {
+	// If liqo flag is set, install liqo in all clusters, peer consumer and providers
+	if configs.IsLiqoActive() {
 		LiqoInstallAll()
+		LiqoPeerAll()
+		LiqoOffload()
 	}
 
 	// node Creation per cluster

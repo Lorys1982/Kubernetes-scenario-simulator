@@ -289,7 +289,6 @@ func clusterArgs(selector bool) [][]string {
 	clusters := configs.GetClusterNames()
 	kwokConf := configs.GetKwokConf()
 	auditConf := configs.GetAuditConf()
-	liqo := configs.GetLiqoConf()
 
 	if selector {
 		for range clusters {
@@ -315,7 +314,7 @@ func clusterArgs(selector bool) [][]string {
 		if selector && auditConf[i] != "" {
 			command[i] = append(command[i], "--kube-audit-policy", auditConf[i])
 		}
-		if selector && liqo {
+		if selector && configs.IsLiqoActive() {
 			command[i] = append(command[i], "--runtime", "kind")
 		}
 	}
@@ -324,11 +323,13 @@ func clusterArgs(selector bool) [][]string {
 }
 
 func KwokctlCreateAll() {
+	wg := sync.WaitGroup{}
 	args := clusterArgs(true)
 	for i := range args {
+		wg.Add(1)
 		info := commandInfo{
 			Queue: configs.Queue{
-				Name: "Kwokctl",
+				Name: "KwokctlCreate",
 				KubeContext: configs.Context{
 					ClusterIndex: i,
 				},
@@ -336,13 +337,32 @@ func KwokctlCreateAll() {
 			CmdIndex: 0,
 			ExecDir:  "configs/topology",
 		}
-		cmd := exec.Command("kwokctl", args[i]...)
-		err := commandRun(cmd, 0, info)
-		if err != nil {
-			crashLog(err.Error(), info)
+		// For now not usable, since concurrency breaks everything here
+		// plus, to use more than 2 clusters we need to run this command
+		// sudo sysctl fs.inotify.max_user_watches=524288
+		// sudo sysctl fs.inotify.max_user_instances=512
+		if configs.IsLiqoActive() {
+			kwokctlCreate(args[i], info, &wg)
+			//nodeName := "kwok" + "-" + configs.GetClusterName(i) + "-" + "control-plane"
+			//err := WaitForContainer(nodeName)
+			//if err != nil {
+			//	crashLog(err.Error(), info)
+			//}
+		} else {
+			kwokctlCreate(args[i], info, &wg)
 		}
 	}
+	wg.Wait()
 	clusterUp = true
+}
+
+func kwokctlCreate(args []string, info commandInfo, wg *sync.WaitGroup) {
+	cmd := exec.Command("kwokctl", args...)
+	err := commandRun(cmd, 0, info)
+	if err != nil {
+		crashLog(err.Error(), info)
+	}
+	wg.Done()
 }
 
 func KwokctlDeleteAll() {
@@ -352,13 +372,13 @@ func KwokctlDeleteAll() {
 	crashHalt(false)
 	for i := range args {
 		wg.Add(1)
-		go KwokctlDelete(args[i], clusters[i], i, &wg)
+		go kwokctlDelete(args[i], clusters[i], i, &wg)
 	}
 	wg.Wait()
 	writers.KillLoggers()
 }
 
-func KwokctlDelete(args []string, cluster string, clusterIndex int, wg *sync.WaitGroup) {
+func kwokctlDelete(args []string, cluster string, clusterIndex int, wg *sync.WaitGroup) {
 	home, _ := os.UserHomeDir()
 
 	// Copy and compress log file
@@ -367,7 +387,7 @@ func KwokctlDelete(args []string, cluster string, clusterIndex int, wg *sync.Wai
 	cmd := exec.Command("kwokctl", args...)
 	err := commandCleanRun(cmd, time.Since(global.StartTime).Seconds(), commandInfo{
 		Queue: configs.Queue{
-			Name: "Kwokctl",
+			Name: "KwokctlDelete",
 			KubeContext: configs.Context{
 				ClusterIndex: clusterIndex,
 			},
@@ -456,7 +476,8 @@ func NodeCreate(nodes node, clusterIndex int) {
 	nodes.Create(0, commandInfo{
 		Queue: configs.Queue{
 			Name:        "Topology",
-			KubeContext: configs.DefaultKubeconfig.Contexts[clusterIndex],
+			Kubeconfig:  configs.GetKubeConfigPath(clusterIndex),
+			KubeContext: configs.ClusterKubeconfigs[clusterIndex].Contexts[0],
 		},
 		CmdIndex: 0,
 		ExecDir:  "configs/topology",
@@ -467,7 +488,8 @@ func NodeDelete(nodes node, clusterIndex int) {
 	nodes.Delete(0, commandInfo{
 		Queue: configs.Queue{
 			Name:        "Topology",
-			KubeContext: configs.DefaultKubeconfig.Contexts[clusterIndex],
+			Kubeconfig:  configs.GetKubeConfigPath(clusterIndex),
+			KubeContext: configs.ClusterKubeconfigs[clusterIndex].Contexts[0],
 		},
 		CmdIndex: 0,
 		ExecDir:  "configs/topology",
