@@ -18,16 +18,14 @@ func LiqoInstallAll() {
 
 func liqoInstall(clusterIndex int, wg *sync.WaitGroup) {
 	info := commandInfo{
-		Queue: configs.Queue{
-			Name:        "LiqoInstall",
-			Kubeconfig:  configs.GetKubeConfigPath(clusterIndex),
-			KubeContext: configs.ClusterKubeconfigs[clusterIndex].Contexts[0],
-		},
-		CmdIndex: 0,
+		QueueName:   "LiqoInstall",
+		Kubeconfig:  configs.GetKubeConfigPath(clusterIndex),
+		KubeContext: configs.ClusterKubeconfigs[clusterIndex].Contexts[0],
+		CmdIndex:    0,
 	}
 	nodeName := "kwok" + "-" + configs.GetClusterName(clusterIndex) + "-" + "control-plane"
 	KubectlUncordon(0, info, nodeName)
-	cmd := exec.Command("liqoctl", "install", "kind", "--context", info.Queue.KubeContext.Name)
+	cmd := exec.Command("liqoctl", "install", "kind", "--context", info.KubeContext.Name)
 	err := commandRun(cmd, 0, info)
 	if err != nil {
 		crashLog(err.Error(), info)
@@ -39,12 +37,10 @@ func LiqoPeerAll() {
 	consumerCluster, consumerIndex := configs.GetLiqoConsumerCluster()
 	wg := &sync.WaitGroup{}
 	info := commandInfo{
-		Queue: configs.Queue{
-			Name:        "LiqoPeer",
-			Kubeconfig:  configs.GetKubeConfigPath(consumerIndex),
-			KubeContext: configs.ClusterKubeconfigs[consumerIndex].Contexts[0],
-		},
-		CmdIndex: 0,
+		QueueName:   "LiqoPeer",
+		Kubeconfig:  configs.GetKubeConfigPath(consumerIndex),
+		KubeContext: configs.ClusterKubeconfigs[consumerIndex].Contexts[0],
+		CmdIndex:    0,
 	}
 	for _, cluster := range configs.GetClusterNames() {
 		if cluster != consumerCluster {
@@ -57,7 +53,7 @@ func LiqoPeerAll() {
 
 func liqoPeer(cluster string, info commandInfo, wg *sync.WaitGroup) {
 	cmd := exec.Command("liqoctl", "peer", "--remote-kubeconfig", configs.GenKubeConfigPath(cluster),
-		"--server-service-type", "NodePort", "--context", info.Queue.KubeContext.Name)
+		"--server-service-type", "NodePort", "--context", info.KubeContext.Name)
 	err := commandRun(cmd, 0, info)
 	if err != nil {
 		crashLog(err.Error(), info)
@@ -69,14 +65,13 @@ func LiqoOffload() {
 	_, consumerIndex := configs.GetLiqoConsumerCluster()
 	var args []string
 	info := commandInfo{
-		Queue: configs.Queue{
-			Name:        "LiqoOffload",
-			Kubeconfig:  configs.GetKubeConfigPath(consumerIndex),
-			KubeContext: configs.ClusterKubeconfigs[consumerIndex].Contexts[0],
-		},
-		CmdIndex: 0,
+		QueueName:   "LiqoOffload",
+		Kubeconfig:  configs.GetKubeConfigPath(consumerIndex),
+		KubeContext: configs.ClusterKubeconfigs[consumerIndex].Contexts[0],
+		CmdIndex:    0,
 	}
 	for _, offloadInfo := range configs.GetLiqoConf().Offload {
+		KubectlCreate("namespace", 0, info, offloadInfo.Namespace)
 		args = append(args, "offload", "namespace", offloadInfo.Namespace)
 		if len(offloadInfo.NamespaceStrategy) != 0 {
 			args = append(args, "--namespace-mapping-strategy", offloadInfo.NamespaceStrategy)
@@ -87,7 +82,7 @@ func LiqoOffload() {
 		if len(offloadInfo.PodStrategy) != 0 {
 			args = append(args, "--pod-offloading-strategy", offloadInfo.PodStrategy)
 		}
-		args = append(args, "--context", info.Queue.KubeContext.Name)
+		args = append(args, "--context", info.KubeContext.Name)
 		cmd := exec.Command("liqoctl", args...)
 		err := commandRun(cmd, 0, info)
 		if err != nil {
@@ -97,12 +92,10 @@ func LiqoOffload() {
 	for clusterIndex := range configs.GetClusterNames() {
 		nodeName := "kwok" + "-" + configs.GetClusterName(clusterIndex) + "-" + "control-plane"
 		info = commandInfo{
-			Queue: configs.Queue{
-				Name:        "LiqoEnd",
-				Kubeconfig:  configs.GetKubeConfigPath(clusterIndex),
-				KubeContext: configs.ClusterKubeconfigs[clusterIndex].Contexts[0],
-			},
-			CmdIndex: 0,
+			QueueName:   "LiqoEnd",
+			Kubeconfig:  configs.GetKubeConfigPath(clusterIndex),
+			KubeContext: configs.ClusterKubeconfigs[clusterIndex].Contexts[0],
+			CmdIndex:    0,
 		}
 		KubectlCordon(0, info, nodeName)
 	}

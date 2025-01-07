@@ -43,8 +43,13 @@ type ContextInfo struct {
 // want to perform operations through kubectl
 type Kube struct {
 	Filename string
+	Resource string
 	Args     []string
 	Count    int
+}
+
+type Namespace struct {
+	Args []string
 }
 
 type Cluster struct {
@@ -79,14 +84,16 @@ type Config struct {
 // Command struct contains a single command of the
 // command sequence inside a Queue
 type Command struct {
-	Exec     string   `yaml:"exec,omitempty"`
-	Command  string   `yaml:"command,omitempty"`
-	Time     float64  `yaml:"time"`
-	Filename string   `yaml:"filename,omitempty"`
-	Count    int      `yaml:"count,omitempty"`
-	Args     []string `yaml:"args,omitempty"`
-	Context  string   `yaml:"context,omitempty"`
-	index    int
+	Exec      string   `yaml:"exec,omitempty"`
+	Command   string   `yaml:"command,omitempty"`
+	Time      float64  `yaml:"time"`
+	Filename  string   `yaml:"filename,omitempty"`
+	Count     int      `yaml:"count,omitempty"`
+	Args      []string `yaml:"args,omitempty"`
+	Context   string   `yaml:"context,omitempty"`
+	Namespace string   `yaml:"namespace,omitempty"`
+	Resource  string   `yaml:"resource,omitempty"`
+	index     int
 }
 
 // Queue struct contains a Command sequence and the
@@ -129,9 +136,9 @@ type nodeCurrentReplicas struct {
 
 // Node struct contains generic nodes information
 type Node struct {
-	ConfigName string `yaml:"filename"`
-	Count      int    `yaml:"count"`
-	name       string
+	Filename string `yaml:"filename"`
+	Count    int    `yaml:"count"`
+	name     string
 }
 
 // GetName returns the name from metadata of the
@@ -195,7 +202,7 @@ func (node *Node) SetCurrentIndex(index int, clusterIndex int) {
 // GetConfName returns the config file name of the
 // associated node
 func (node *Node) GetConfName() string {
-	return node.ConfigName
+	return node.Filename
 }
 
 // GetCount returns the replicas wanted for the associated node
@@ -323,7 +330,7 @@ func (c Command) GetIndex() int { return c.index }
 func confPreprocess() {
 	for i := range conf.Clusters {
 		for j := range conf.Clusters[i].Nodes {
-			conf.Clusters[i].Nodes[j].ConfigName = path.Join("configs", "topology", conf.Clusters[i].Nodes[j].ConfigName)
+			conf.Clusters[i].Nodes[j].Filename = path.Join("configs", "topology", conf.Clusters[i].Nodes[j].Filename)
 		}
 	}
 

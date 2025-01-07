@@ -42,8 +42,8 @@ func Init() {
 						},
 						Nodes: []configs.Node{
 							{
-								ConfigName: "example.yaml",
-								Count:      0,
+								Filename: "example.yaml",
+								Count:    0,
 							},
 						},
 						Audit:    "",
@@ -56,8 +56,8 @@ func Init() {
 						},
 						Nodes: []configs.Node{
 							{
-								ConfigName: "example.yaml",
-								Count:      0,
+								Filename: "example.yaml",
+								Count:    0,
 							},
 						},
 						Audit:    "",

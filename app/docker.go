@@ -14,7 +14,7 @@ func WaitForContainer(containerName string) error {
 	if err != nil {
 		return fmt.Errorf("error initializing docker client: %w", err)
 	}
-	// Context to set a timeout
+	// KubeContext to set a timeout
 	timeoutContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	for !ContainerExists(containerName, dockerClient, timeoutContext) {
