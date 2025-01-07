@@ -307,7 +307,7 @@ func clusterArgs(selector bool) [][]string {
 
 		if selector && len(kwokConf) != 0 {
 			for _, kconf := range kwokConf[i] {
-				command[i] = append(command[i], "--config", kconf)
+				command[i] = append(command[i], kconf)
 			}
 		}
 
@@ -337,17 +337,19 @@ func KwokctlCreateAll() {
 			CmdIndex: 0,
 			ExecDir:  "configs/topology",
 		}
-		// For now not usable, since concurrency breaks everything here
+		// IMPORTANT! Until a PR is acceptend by KWOK, this concurrency section only works with a modified
+		// kwokctl binary (provided in the application), if using the standard kwokctl, please comment the if
+		// statement below and only keep what is in the else clause
 		// plus, to use more than 2 clusters we need to run this command
 		// sudo sysctl fs.inotify.max_user_watches=524288
 		// sudo sysctl fs.inotify.max_user_instances=512
 		if configs.IsLiqoActive() {
-			kwokctlCreate(args[i], info, &wg)
-			//nodeName := "kwok" + "-" + configs.GetClusterName(i) + "-" + "control-plane"
-			//err := WaitForContainer(nodeName)
-			//if err != nil {
-			//	crashLog(err.Error(), info)
-			//}
+			go kwokctlCreate(args[i], info, &wg)
+			nodeName := "kwok" + "-" + configs.GetClusterName(i) + "-" + "control-plane"
+			err := WaitForContainer(nodeName)
+			if err != nil {
+				crashLog(err.Error(), info)
+			}
 		} else {
 			kwokctlCreate(args[i], info, &wg)
 		}

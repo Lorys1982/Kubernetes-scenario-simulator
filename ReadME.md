@@ -44,7 +44,7 @@ This simulator is based on the usage of ```KWOK``` and ```Kubectl```, therefore 
 Enter the `./config` directory and fill the `config.yaml` to define the cluster **topology**:
 ```bash
 cd configs
-nano config.yaml # or: whatever other text editor
+nano config1.yaml # or: whatever other text editor
 ```
 
 > [!NOTE]
@@ -62,14 +62,14 @@ nano config.yaml # or: whatever other text editor
 >       - name: "<node-conf.yaml>" # The config file for the node
 >         count: int # the number of nodes you want
 >     auditLoggingConfig: "<audit-conf.yaml>" # the audit log config file (same as standard k8s)
->     commandsConfig: "<config.yaml>" # The name of the scenario simulation config file, it is config.yaml by default
+>     commandsConfig: "<config1.yaml>" # The name of the scenario simulation config file, it is config1.yaml by default
 > ```
 > Make sure to put all the configs written in this config file inside the `./configs/topology` **directory**
 
 Enter the `./configs/command_configs` directory and fill the `config.yaml` to program the **scenario** to simulate:
 ```bash
 cd command_configs
-nano config.yaml # or: whatever other text editor
+nano config1.yaml # or: whatever other text editor
 ```
 
 > [!NOTE] 

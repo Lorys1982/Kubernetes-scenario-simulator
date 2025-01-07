@@ -382,6 +382,7 @@ func ConfPostprocess() {
 		if err != nil {
 			writers.CrashLog(err.Error(), none)
 		}
+		ClusterKubeconfigs[i].Contexts[0].ClusterIndex = i
 	}
 
 	clusters := GetClusterNameKubeconf()

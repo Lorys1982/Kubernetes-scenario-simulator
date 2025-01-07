@@ -26,7 +26,7 @@ func Init() {
 	}
 
 	// Main config file template creation
-	file, err := os.OpenFile("configs/config.yaml", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0664)
+	file, err := os.OpenFile("configs/config1.yaml", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0664)
 	if !os.IsExist(err) {
 		if err != nil {
 			log.Fatal(err)
@@ -47,7 +47,7 @@ func Init() {
 							},
 						},
 						Audit:    "",
-						Commands: "config.yaml",
+						Commands: "config1.yaml",
 					},
 					{
 						ClusterName: "Cluster2",
@@ -61,7 +61,7 @@ func Init() {
 							},
 						},
 						Audit:    "",
-						Commands: "config.yaml",
+						Commands: "config1.yaml",
 					},
 				},
 			})
@@ -73,7 +73,7 @@ func Init() {
 	}
 
 	// CommandsConf config file template creation
-	file, err = os.OpenFile("configs/command_configs/config.yaml", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0664)
+	file, err = os.OpenFile("configs/command_configs/config1.yaml", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0664)
 	if !os.IsExist(err) {
 		if err != nil {
 			log.Fatal(err)

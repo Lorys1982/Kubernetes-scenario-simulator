@@ -27,7 +27,7 @@ func liqoInstall(clusterIndex int, wg *sync.WaitGroup) {
 	}
 	nodeName := "kwok" + "-" + configs.GetClusterName(clusterIndex) + "-" + "control-plane"
 	KubectlUncordon(0, info, nodeName)
-	cmd := exec.Command("liqoctl", "install", "kind", "--context", info.Queue.KubeContext.Name, "--disable-kernel-version-check")
+	cmd := exec.Command("liqoctl", "install", "kind", "--context", info.Queue.KubeContext.Name)
 	err := commandRun(cmd, 0, info)
 	if err != nil {
 		crashLog(err.Error(), info)
