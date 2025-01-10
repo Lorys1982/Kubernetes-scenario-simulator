@@ -7,13 +7,14 @@ import (
 	"github.com/notEpsilon/go-pair"
 	"io"
 	"log"
-	"main/configs"
+	"main/apis/v1alpha1"
 	"main/global"
 	. "main/utils"
 	"main/writers"
 	"os"
 	"os/exec"
 	"path"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -28,13 +29,17 @@ var crashLock sync.Mutex
 var crashBool = false
 var clusterUp = false
 
-type kube configs.Kube
-type node []configs.Node
+type kube v1alpha1.Kube
+type node []v1alpha1.Node
+type namespace v1alpha1.Namespace
 
 type commandInfo struct {
-	Queue    configs.Queue
-	CmdIndex int
-	ExecDir  string
+	QueueName   string
+	Kubeconfig  string
+	KubeContext v1alpha1.Context
+	Namespace   string
+	CmdIndex    int
+	ExecDir     string
 }
 
 // Operations interface for resources in command put in configs
@@ -68,7 +73,7 @@ func CommandExists(command string) bool {
 	return err == nil
 }
 
-func concurrentCommandRun(cmd *exec.Cmd, cmdSpecs configs.Command, wg *sync.WaitGroup, info commandInfo) {
+func concurrentCommandRun(cmd *exec.Cmd, cmdSpecs v1alpha1.Command, wg *sync.WaitGroup, info commandInfo) {
 	defer wg.Done()
 	time.Sleep(time.Duration(cmdSpecs.Time*float64(time.Second)) * time.Nanosecond)
 	log.Printf("Execution at Time: %f\n", cmdSpecs.Time)
@@ -78,7 +83,7 @@ func concurrentCommandRun(cmd *exec.Cmd, cmdSpecs configs.Command, wg *sync.Wait
 	_ = commandRun(cmd, time.Since(global.StartTime).Seconds(), info)
 }
 
-func concurrentCommandCleanRun(cmd *exec.Cmd, cmdSpecs configs.Command, wg *sync.WaitGroup, info commandInfo) {
+func concurrentCommandCleanRun(cmd *exec.Cmd, cmdSpecs v1alpha1.Command, wg *sync.WaitGroup, info commandInfo) {
 	defer wg.Done()
 	time.Sleep(time.Duration(cmdSpecs.Time*float64(time.Second)) * time.Nanosecond)
 	log.Printf("Execution at Time: %f\n", cmdSpecs.Time)
@@ -89,24 +94,21 @@ func concurrentCommandCleanRun(cmd *exec.Cmd, cmdSpecs configs.Command, wg *sync
 }
 
 func commandRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
-	if info.Queue.IsEmpty() {
-		info.Queue.Name = "<None>"
-	}
 	if info.ExecDir != "" {
 		cmd.Dir = info.ExecDir
 	}
 	stdBuff := bytes.Buffer{}
 	errBuff := bytes.Buffer{}
-	outLog := log.New(&stdBuff, fmt.Sprintf("[Queue: %s][Command #%d Start] ", info.Queue.Name, info.CmdIndex), log.Ltime|log.Lmicroseconds)
-	errLog := log.New(&errBuff, fmt.Sprintf("[Queue: %s][Command #%d Start] ", info.Queue.Name, info.CmdIndex), log.Ltime|log.Lmicroseconds)
+	outLog := log.New(&stdBuff, fmt.Sprintf("[Queue: %s][Command #%d Start] ", info.QueueName, info.CmdIndex), log.Ltime|log.Lmicroseconds)
+	errLog := log.New(&errBuff, fmt.Sprintf("[Queue: %s][Command #%d Start] ", info.QueueName, info.CmdIndex), log.Ltime|log.Lmicroseconds)
 
 	commandString := strings.Join(cmd.Args, " ")
 
 	outLog.Println(commandString)
 	errLog.Println(commandString)
 
-	stdPrefix := decowriter.New(&stdBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.Queue.Name, info.CmdIndex)), []byte{})
-	errPrefix := decowriter.New(&errBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.Queue.Name, info.CmdIndex)), []byte{})
+	stdPrefix := decowriter.New(&stdBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.QueueName, info.CmdIndex)), []byte{})
+	errPrefix := decowriter.New(&errBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.QueueName, info.CmdIndex)), []byte{})
 
 	cmd.Stdout = io.MultiWriter(os.Stdout, stdPrefix)
 	cmd.Stderr = io.MultiWriter(os.Stderr, errPrefix)
@@ -114,36 +116,37 @@ func commandRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
 	_ = cmd.Start()
 	cmdErr := cmd.Wait()
 
-	outLog.SetPrefix(fmt.Sprintf("[Queue: %s][Command #%d End] ", info.Queue.Name, info.CmdIndex))
-	errLog.SetPrefix(fmt.Sprintf("[Queue: %s][Command #%d End] ", info.Queue.Name, info.CmdIndex))
+	r := regexp.MustCompile("(\\r *\\r)*|(\\n *\\n)*")
+	stdBuff = *bytes.NewBuffer(r.ReplaceAll(stdBuff.Bytes(), []byte("")))
+	errBuff = *bytes.NewBuffer(r.ReplaceAll(errBuff.Bytes(), []byte("")))
+
+	outLog.SetPrefix(fmt.Sprintf("[Queue: %s][Command #%d End] ", info.QueueName, info.CmdIndex))
+	errLog.SetPrefix(fmt.Sprintf("[Queue: %s][Command #%d End] ", info.QueueName, info.CmdIndex))
 	outLog.Printf("Executed at Time: %f Seconds\n\n", execTime)
 	errLog.Printf("Executed at Time: %f Seconds\n\n", execTime)
 
-	logChannelStd <- *pair.New(stdBuff.Bytes(), info.Queue.KubeContext.ClusterIndex)
-	logChannelErr <- *pair.New(errBuff.Bytes(), info.Queue.KubeContext.ClusterIndex)
+	logChannelStd <- *pair.New(stdBuff.Bytes(), info.KubeContext.ClusterIndex)
+	logChannelErr <- *pair.New(errBuff.Bytes(), info.KubeContext.ClusterIndex)
 
 	return cmdErr
 }
 
 func commandCleanRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
-	if info.Queue.IsEmpty() {
-		info.Queue.Name = "<None>"
-	}
 	if info.ExecDir != "" {
 		cmd.Dir = info.ExecDir
 	}
 	stdBuff := bytes.Buffer{}
 	errBuff := bytes.Buffer{}
-	outLog := log.New(&stdBuff, fmt.Sprintf("[Queue: %s][Command #%d Start] ", info.Queue.Name, info.CmdIndex), log.Ltime|log.Lmicroseconds)
-	errLog := log.New(&errBuff, fmt.Sprintf("[Queue: %s][Command #%d Start] ", info.Queue.Name, info.CmdIndex), log.Ltime|log.Lmicroseconds)
+	outLog := log.New(&stdBuff, fmt.Sprintf("[Queue: %s][Command #%d Start] ", info.QueueName, info.CmdIndex), log.Ltime|log.Lmicroseconds)
+	errLog := log.New(&errBuff, fmt.Sprintf("[Queue: %s][Command #%d Start] ", info.QueueName, info.CmdIndex), log.Ltime|log.Lmicroseconds)
 
 	commandString := strings.Join(cmd.Args, " ")
 
 	outLog.Println(commandString)
 	errLog.Println(commandString)
 
-	stdPrefix := decowriter.New(&stdBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.Queue.Name, info.CmdIndex)), []byte{})
-	errPrefix := decowriter.New(&errBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.Queue.Name, info.CmdIndex)), []byte{})
+	stdPrefix := decowriter.New(&stdBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.QueueName, info.CmdIndex)), []byte{})
+	errPrefix := decowriter.New(&errBuff, []byte(fmt.Sprintf("[Queue: %s][Command #%d] ", info.QueueName, info.CmdIndex)), []byte{})
 
 	cmd.Stdout = stdPrefix
 	cmd.Stderr = errPrefix
@@ -151,18 +154,22 @@ func commandCleanRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
 	_ = cmd.Start()
 	cmdErr := cmd.Wait()
 
-	outLog.SetPrefix(fmt.Sprintf("[Queue: %s][Command #%d End] ", info.Queue.Name, info.CmdIndex))
-	errLog.SetPrefix(fmt.Sprintf("[Queue: %s][Command #%d End] ", info.Queue.Name, info.CmdIndex))
+	r := regexp.MustCompile("(\\r *\\r)*|(\\n *\\n)*")
+	stdBuff = *bytes.NewBuffer(r.ReplaceAll(stdBuff.Bytes(), []byte("")))
+	errBuff = *bytes.NewBuffer(r.ReplaceAll(errBuff.Bytes(), []byte("")))
+
+	outLog.SetPrefix(fmt.Sprintf("[Queue: %s][Command #%d End] ", info.QueueName, info.CmdIndex))
+	errLog.SetPrefix(fmt.Sprintf("[Queue: %s][Command #%d End] ", info.QueueName, info.CmdIndex))
 	outLog.Printf("Executed at Time: %f Seconds\n\n", execTime)
 	errLog.Printf("Executed at Time: %f Seconds\n\n", execTime)
 
-	logChannelStd <- *pair.New(stdBuff.Bytes(), info.Queue.KubeContext.ClusterIndex)
-	logChannelErr <- *pair.New(errBuff.Bytes(), info.Queue.KubeContext.ClusterIndex)
+	logChannelStd <- *pair.New(stdBuff.Bytes(), info.KubeContext.ClusterIndex)
+	logChannelErr <- *pair.New(errBuff.Bytes(), info.KubeContext.ClusterIndex)
 
 	return cmdErr
 }
 
-func concurrentExecWrapper(fullCmd []string, cmdSpecs configs.Command, wg *sync.WaitGroup, info commandInfo) {
+func concurrentExecWrapper(fullCmd []string, cmdSpecs v1alpha1.Command, wg *sync.WaitGroup, info commandInfo) {
 	defer wg.Done()
 	time.Sleep(time.Duration(cmdSpecs.Time*float64(time.Second)) * time.Nanosecond)
 	log.Printf("Execution at Time: %f\n", cmdSpecs.Time)
@@ -172,7 +179,7 @@ func concurrentExecWrapper(fullCmd []string, cmdSpecs configs.Command, wg *sync.
 	execWrapper(fullCmd, cmdSpecs, info)
 }
 
-func execWrapper(fullCmd []string, cfg configs.Command, info commandInfo) {
+func execWrapper(fullCmd []string, cmdSpecs v1alpha1.Command, info commandInfo) {
 	var object Operations
 	resource := fullCmd[0]
 	action := fullCmd[1]
@@ -183,15 +190,22 @@ func execWrapper(fullCmd []string, cfg configs.Command, info commandInfo) {
 	case "node":
 		object = node{
 			{
-				ConfigName: path.Join("configs/command_configs", cfg.Filename),
-				Count:      cfg.Count,
+				Filename: path.Join("configs/command_configs", cmdSpecs.Filename),
+				Count:    cmdSpecs.Count,
+				Args:     cmdSpecs.Args,
 			},
 		}
 	case "kube":
 		object = kube{
-			Filename: cfg.Filename,
-			Args:     cfg.Args,
-			Count:    cfg.Count,
+			Filename: cmdSpecs.Filename,
+			Resource: cmdSpecs.Resource,
+			Args:     cmdSpecs.Args,
+			Count:    cmdSpecs.Count,
+		}
+	case "namespace":
+		object = namespace{
+			Filename: cmdSpecs.Filename,
+			Args:     cmdSpecs.Args,
 		}
 	default:
 		crashLog(fmt.Sprintf("Resource %s does not exist", fullCmd[0]), info)
@@ -216,7 +230,7 @@ func execWrapper(fullCmd []string, cfg configs.Command, info commandInfo) {
 	}
 }
 
-func ConcurrentQueueRun(clusterQueues [][]configs.Queue) {
+func ConcurrentQueueRun(clusterQueues [][]v1alpha1.Queue) {
 	var wgQueues sync.WaitGroup
 	global.StartTime = time.Now()
 	for _, queues := range clusterQueues {
@@ -228,7 +242,7 @@ func ConcurrentQueueRun(clusterQueues [][]configs.Queue) {
 	wgQueues.Wait()
 }
 
-func ConcurrentCommandsRun(queue configs.Queue, wgQueues *sync.WaitGroup) {
+func ConcurrentCommandsRun(queue v1alpha1.Queue, wgQueues *sync.WaitGroup) {
 	wgCommands := sync.WaitGroup{}
 	cmds := queue.Sequence
 	sort.Slice(cmds, func(i, j int) bool {
@@ -236,16 +250,22 @@ func ConcurrentCommandsRun(queue configs.Queue, wgQueues *sync.WaitGroup) {
 	})
 
 	info := commandInfo{
-		Queue:    queue,
-		CmdIndex: -1,
-		ExecDir:  "",
+		QueueName:   queue.Name,
+		Kubeconfig:  queue.Kubeconfig,
+		KubeContext: queue.KubeContext,
+		Namespace:   "",
+		CmdIndex:    -1,
+		ExecDir:     "",
 	}
 
 	for _, cmdSpecs := range cmds {
 		wgCommands.Add(1)
 		cmdSpecs.Command = strings.ToLower(cmdSpecs.Command)
-		if cmdSpecs.Context != "" {
-			queue.KubeContext.Name = cmdSpecs.Context
+		if len(cmdSpecs.Context) != 0 {
+			info.KubeContext.Name = cmdSpecs.Context
+		}
+		if len(cmdSpecs.Namespace) != 0 {
+			info.Namespace = cmdSpecs.Namespace
 		}
 		if cmdSpecs.Exec != "" { // User sent a complete command
 			fullCmd := strings.Split(cmdSpecs.Exec, " ")
@@ -253,7 +273,7 @@ func ConcurrentCommandsRun(queue configs.Queue, wgQueues *sync.WaitGroup) {
 				info.CmdIndex = cmdSpecs.GetIndex()
 				crashLog(fmt.Sprintf("Command %s does not exist", fullCmd[0]), info)
 			}
-			fullCmd = append(fullCmd, "--kubeconfig", queue.Kubeconfig, "--context", queue.KubeContext.Name)
+			fullCmd = kubectlScopeArgs(fullCmd, info)
 			cmd := exec.Command(fullCmd[0], fullCmd[1:]...)
 			cmd.Dir = "configs/command_configs"
 			go concurrentCommandRun(cmd, cmdSpecs, &wgCommands, info)
@@ -277,9 +297,9 @@ func ConcurrentCommandsRun(queue configs.Queue, wgQueues *sync.WaitGroup) {
 //	true -> cluster creation
 func clusterArgs(selector bool) [][]string {
 	var command [][]string
-	clusters := configs.GetClusterName()
-	kwokConf := configs.GetKwokConf()
-	auditConf := configs.GetAuditConf()
+	clusters := v1alpha1.GetClusterNames()
+	kwokConf := v1alpha1.GetKwokConf()
+	auditConf := v1alpha1.GetAuditConf()
 
 	if selector {
 		for range clusters {
@@ -298,12 +318,15 @@ func clusterArgs(selector bool) [][]string {
 
 		if selector && len(kwokConf) != 0 {
 			for _, kconf := range kwokConf[i] {
-				command[i] = append(command[i], "--config", kconf)
+				command[i] = append(command[i], kconf)
 			}
 		}
 
 		if selector && auditConf[i] != "" {
 			command[i] = append(command[i], "--kube-audit-policy", auditConf[i])
+		}
+		if selector && v1alpha1.IsLiqoActive() {
+			command[i] = append(command[i], "--runtime", "kind")
 		}
 	}
 
@@ -311,41 +334,62 @@ func clusterArgs(selector bool) [][]string {
 }
 
 func KwokctlCreateAll() {
+	wg := sync.WaitGroup{}
 	args := clusterArgs(true)
 	for i := range args {
+		wg.Add(1)
 		info := commandInfo{
-			Queue: configs.Queue{
-				Name: "Kwokctl",
-				KubeContext: configs.Context{
-					ClusterIndex: i,
-				},
+			QueueName: "KwokctlCreate",
+			KubeContext: v1alpha1.Context{
+				ClusterIndex: i,
 			},
 			CmdIndex: 0,
 			ExecDir:  "configs/topology",
 		}
-		cmd := exec.Command("kwokctl", args[i]...)
-		err := commandRun(cmd, 0, info)
-		if err != nil {
-			crashLog(err.Error(), info)
+		// IMPORTANT! Until a PR is acceptend by KWOK, this concurrency section only works with a modified
+		// kwokctl binary (provided in the application), if using the standard kwokctl, please comment the if
+		// statement below and only keep what is in the else clause
+		// plus, to use more than 2 clusters we need to run this command
+		// sudo sysctl fs.inotify.max_user_watches=524288
+		// sudo sysctl fs.inotify.max_user_instances=512
+		if v1alpha1.IsLiqoActive() {
+			go kwokctlCreate(args[i], info, &wg)
+			nodeName := "kwok" + "-" + v1alpha1.GetClusterName(i) + "-" + "control-plane"
+			err := WaitForContainer(nodeName)
+			if err != nil {
+				crashLog(err.Error(), info)
+			}
+		} else {
+			kwokctlCreate(args[i], info, &wg)
 		}
 	}
+	wg.Wait()
 	clusterUp = true
+}
+
+func kwokctlCreate(args []string, info commandInfo, wg *sync.WaitGroup) {
+	cmd := exec.Command("kwokctl", args...)
+	err := commandRun(cmd, 0, info)
+	if err != nil {
+		crashLog(err.Error(), info)
+	}
+	wg.Done()
 }
 
 func KwokctlDeleteAll() {
 	wg := sync.WaitGroup{}
 	args := clusterArgs(false)
-	clusters := configs.GetClusterName()
+	clusters := v1alpha1.GetClusterNames()
 	crashHalt(false)
 	for i := range args {
 		wg.Add(1)
-		go KwokctlDelete(args[i], clusters[i], i, &wg)
+		go kwokctlDelete(args[i], clusters[i], i, &wg)
 	}
 	wg.Wait()
 	writers.KillLoggers()
 }
 
-func KwokctlDelete(args []string, cluster string, clusterIndex int, wg *sync.WaitGroup) {
+func kwokctlDelete(args []string, cluster string, clusterIndex int, wg *sync.WaitGroup) {
 	home, _ := os.UserHomeDir()
 
 	// Copy and compress log file
@@ -353,11 +397,9 @@ func KwokctlDelete(args []string, cluster string, clusterIndex int, wg *sync.Wai
 
 	cmd := exec.Command("kwokctl", args...)
 	err := commandCleanRun(cmd, time.Since(global.StartTime).Seconds(), commandInfo{
-		Queue: configs.Queue{
-			Name: "Kwokctl",
-			KubeContext: configs.Context{
-				ClusterIndex: clusterIndex,
-			},
+		QueueName: "KwokctlDelete",
+		KubeContext: v1alpha1.Context{
+			ClusterIndex: clusterIndex,
 		},
 		CmdIndex: 0,
 		ExecDir:  "configs/topology",
@@ -371,73 +413,113 @@ func KwokctlDelete(args []string, cluster string, clusterIndex int, wg *sync.Wai
 func KubectlApply(toApply string, execTime float64, info commandInfo, cmdArgs ...string) {
 	args := []string{"apply", "-f", toApply}
 	args = append(args, cmdArgs...)
-	args = append(args, "--kubeconfig", info.Queue.Kubeconfig)
-	args = append(args, "--context", info.Queue.KubeContext.Name)
+	args = kubectlScopeArgs(args, info)
 
 	cmd := exec.Command("kubectl", args...)
 	_ = commandRun(cmd, execTime, info)
 }
 
-func KubectlCreate(toCreate string, execTime float64, info commandInfo, cmdArgs ...string) {
-	args := []string{"create", "-f", toCreate}
-	args = append(args, "--kubeconfig", info.Queue.Kubeconfig)
-	args = append(args, "--context", info.Queue.KubeContext.Name)
+func KubectlCreate(resource Option[string], filename Option[string], execTime float64, info commandInfo, cmdArgs ...string) {
+	args := []string{"create"}
+	if resource.IsSome() {
+		args = append(args, resource.GetSome())
+	} else {
+		args = append(args, "-f", filename.GetSome())
+	}
+	args = append(args, cmdArgs...)
+	args = kubectlScopeArgs(args, info)
 
 	cmd := exec.Command("kubectl", args...)
 	_ = commandRun(cmd, execTime, info)
 }
 
-func KubectlDelete(execTime float64, info commandInfo, cmdArgs ...string) {
+func KubectlDelete(resource Option[string], filename Option[string], execTime float64, info commandInfo, cmdArgs ...string) {
 	args := []string{"delete"}
+	if resource.IsSome() {
+		args = append(args, resource.GetSome())
+	} else {
+		args = append(args, "-f", filename.GetSome())
+	}
 	args = append(args, cmdArgs...)
-	args = append(args, "--kubeconfig", info.Queue.Kubeconfig)
-	args = append(args, "--context", info.Queue.KubeContext.Name)
+	args = kubectlScopeArgs(args, info)
 
 	cmd := exec.Command("kubectl", args...)
 	_ = commandRun(cmd, execTime, info)
 
 }
 
-func KubectlGet(execTime float64, info commandInfo, cmdArgs ...string) {
-	args := []string{"get"}
+func KubectlGet(resource string, execTime float64, info commandInfo, cmdArgs ...string) {
+	args := []string{"get", resource}
 	args = append(args, cmdArgs...)
-	args = append(args, "--kubeconfig", info.Queue.Kubeconfig)
-	args = append(args, "--context", info.Queue.KubeContext.Name)
+	args = kubectlScopeArgs(args, info)
 
 	cmd := exec.Command("kubectl", args...)
 	_ = commandRun(cmd, execTime, info)
 }
 
-func kubectScale(replicas int, execTime float64, info commandInfo, cmdArgs ...string) {
+func kubectScale(resource Option[string], filename Option[string], replicas int, execTime float64, info commandInfo, cmdArgs ...string) {
 	args := []string{"scale"}
+	if resource.IsSome() {
+		args = append(args, resource.GetSome())
+	} else {
+		args = append(args, "-f", filename.GetSome())
+	}
 	args = append(args, cmdArgs...)
 	args = append(args, "--replicas", strconv.Itoa(replicas))
-	args = append(args, "--kubeconfig", info.Queue.Kubeconfig)
-	args = append(args, "--context", info.Queue.KubeContext.Name)
+	args = kubectlScopeArgs(args, info)
 
 	cmd := exec.Command("kubectl", args...)
 	_ = commandRun(cmd, execTime, info)
+}
+
+func KubectlCordon(execTime float64, info commandInfo, cmdArgs ...string) {
+	args := []string{"cordon"}
+	args = append(args, cmdArgs...)
+	args = kubectlScopeArgs(args, info)
+
+	cmd := exec.Command("kubectl", args...)
+	_ = commandRun(cmd, execTime, info)
+}
+
+func KubectlUncordon(execTime float64, info commandInfo, cmdArgs ...string) {
+	args := []string{"uncordon"}
+	args = append(args, cmdArgs...)
+	args = kubectlScopeArgs(args, info)
+
+	cmd := exec.Command("kubectl", args...)
+	_ = commandRun(cmd, execTime, info)
+}
+
+func kubectlScopeArgs(args []string, info commandInfo) []string {
+	args = append(args, "--kubeconfig", info.Kubeconfig)
+	args = append(args, "--context", info.KubeContext.Name)
+	if len(info.Namespace) != 0 {
+		if info.Namespace == "all" {
+			args = append(args, "--all-namespaces")
+		} else {
+			args = append(args, "--namespace", info.Namespace)
+		}
+	}
+	return args
 }
 
 func NodeCreate(nodes node, clusterIndex int) {
 	nodes.Create(0, commandInfo{
-		Queue: configs.Queue{
-			Name:        "Topology",
-			KubeContext: configs.DefaultKubeconfig.Contexts[clusterIndex],
-		},
-		CmdIndex: 0,
-		ExecDir:  "configs/topology",
+		QueueName:   "Topology",
+		Kubeconfig:  v1alpha1.GetKubeConfigPath(clusterIndex),
+		KubeContext: v1alpha1.ClusterKubeconfigs[clusterIndex].Contexts[0],
+		CmdIndex:    0,
+		ExecDir:     "configs/topology",
 	})
 }
 
 func NodeDelete(nodes node, clusterIndex int) {
 	nodes.Delete(0, commandInfo{
-		Queue: configs.Queue{
-			Name:        "Topology",
-			KubeContext: configs.DefaultKubeconfig.Contexts[clusterIndex],
-		},
-		CmdIndex: 0,
-		ExecDir:  "configs/topology",
+		QueueName:   "Topology",
+		Kubeconfig:  v1alpha1.GetKubeConfigPath(clusterIndex),
+		KubeContext: v1alpha1.ClusterKubeconfigs[clusterIndex].Contexts[0],
+		CmdIndex:    0,
+		ExecDir:     "configs/topology",
 	})
 }
 
@@ -458,10 +540,10 @@ func (nodes node) Create(execTime float64, info commandInfo) {
 
 		for range replicas {
 			nodeMutex.Lock()
-			currentIndex := node.GetCurrentIndex(info.Queue.KubeContext.ClusterIndex)
+			currentIndex := node.GetCurrentIndex(info.KubeContext.ClusterIndex)
 			FileReplace(nodeConfName, nodeName, nodeName+"-"+strconv.Itoa(currentIndex), opt)
 			KubectlApply(path.Base(nodeConfName), execTime, info)
-			node.SetCurrentIndex(currentIndex+1, info.Queue.KubeContext.ClusterIndex)
+			node.SetCurrentIndex(currentIndex+1, info.KubeContext.ClusterIndex)
 			nodeMutex.Unlock()
 		}
 		// Just restores input (the initial file)
@@ -476,11 +558,11 @@ func (nodes node) Delete(execTime float64, info commandInfo) {
 			crashLog(err.Error(), info)
 		}
 		toDelete := node.GetCount()
-		initialIndex := node.GetCurrentIndex(info.Queue.KubeContext.ClusterIndex)
+		initialIndex := node.GetCurrentIndex(info.KubeContext.ClusterIndex)
 
 		for range toDelete {
 			nodeMutex.Lock()
-			currentIndex := node.GetCurrentIndex(info.Queue.KubeContext.ClusterIndex) - 1
+			currentIndex := node.GetCurrentIndex(info.KubeContext.ClusterIndex) - 1
 			if currentIndex == -1 {
 				nodeMutex.Unlock()
 				errLog(fmt.Sprintf("Nodes file: \"%s\" | Nodes name: \"%s\" | Set to delete (count): %d | Deletable: %d",
@@ -488,9 +570,9 @@ func (nodes node) Delete(execTime float64, info commandInfo) {
 					"Delete node", info)
 				break
 			}
-			KubectlDelete(execTime, info, []string{"no", nodeName + "-" + strconv.Itoa(currentIndex)}...)
+			KubectlDelete(Some("no"), None[string](), execTime, info, []string{nodeName + "-" + strconv.Itoa(currentIndex)}...)
 			currentIndex--
-			node.SetCurrentIndex(currentIndex+1, info.Queue.KubeContext.ClusterIndex)
+			node.SetCurrentIndex(currentIndex+1, info.KubeContext.ClusterIndex)
 			nodeMutex.Unlock()
 		}
 	}
@@ -501,12 +583,12 @@ func (nodes node) Apply(execTime float64, info commandInfo) {
 }
 
 func (nodes node) Get(execTime float64, info commandInfo) {
-	KubectlGet(execTime, info, "no")
+	KubectlGet("no", execTime, info, nodes[0].Args...)
 }
 
 func (nodes node) Scale(execTime float64, info commandInfo) {
 	wantedReplicas := nodes[0].GetCount()
-	currentReplicas := nodes[0].GetCurrentIndex(info.Queue.KubeContext.ClusterIndex)
+	currentReplicas := nodes[0].GetCurrentIndex(info.KubeContext.ClusterIndex)
 
 	if currentReplicas > wantedReplicas {
 		nodes[0].Count = currentReplicas - wantedReplicas
@@ -519,15 +601,20 @@ func (nodes node) Scale(execTime float64, info commandInfo) {
 
 func (k kube) Create(execTime float64, info commandInfo) {
 	k.Args = fixArgs(k.Args)
-	KubectlCreate(k.Filename, execTime, info, k.Args...)
+	if k.Filename != "" {
+		KubectlCreate(None[string](), Some(k.Filename), execTime, info, k.Args...)
+	} else {
+		KubectlCreate(Some(k.Resource), None[string](), execTime, info, k.Args...)
+	}
 }
 
 func (k kube) Delete(execTime float64, info commandInfo) {
 	k.Args = fixArgs(k.Args)
 	if k.Filename != "" {
-		k.Args = append([]string{"-f", k.Filename}, k.Args...)
+		KubectlDelete(None[string](), Some(k.Filename), execTime, info, k.Args...)
+	} else {
+		KubectlDelete(Some(k.Resource), None[string](), execTime, info, k.Args...)
 	}
-	KubectlDelete(execTime, info, k.Args...)
 }
 
 func (k kube) Apply(execTime float64, info commandInfo) {
@@ -537,15 +624,47 @@ func (k kube) Apply(execTime float64, info commandInfo) {
 
 func (k kube) Get(execTime float64, info commandInfo) {
 	k.Args = fixArgs(k.Args)
-	KubectlGet(execTime, info, k.Args...)
+	KubectlGet(k.Resource, execTime, info, k.Args...)
 }
 
 func (k kube) Scale(execTime float64, info commandInfo) {
 	k.Args = fixArgs(k.Args)
 	if k.Filename != "" {
-		k.Args = append([]string{"-f", k.Filename}, k.Args...)
+		kubectScale(None[string](), Some(k.Filename), k.Count, execTime, info, k.Args...)
+	} else {
+		kubectScale(Some(k.Resource), None[string](), k.Count, execTime, info, k.Args...)
 	}
-	kubectScale(k.Count, execTime, info, k.Args...)
+}
+
+func (n namespace) Create(execTime float64, info commandInfo) {
+	n.Args = fixArgs(n.Args)
+	if n.Filename != "" {
+		KubectlDelete(None[string](), Some(n.Filename), execTime, info, n.Args...)
+	} else {
+		KubectlCreate(Some("namespace"), None[string](), execTime, info, n.Args...)
+	}
+}
+
+func (n namespace) Delete(execTime float64, info commandInfo) {
+	n.Args = fixArgs(n.Args)
+	if n.Filename != "" {
+		KubectlDelete(None[string](), Some(n.Filename), execTime, info, n.Args...)
+	} else {
+		KubectlDelete(Some("namespace"), None[string](), execTime, info, n.Args...)
+	}
+}
+
+func (n namespace) Apply(execTime float64, info commandInfo) {
+	panic("This Function should never be called")
+}
+
+func (n namespace) Get(execTime float64, info commandInfo) {
+	n.Args = fixArgs(n.Args)
+	KubectlGet("namespace", execTime, info, n.Args...)
+}
+
+func (n namespace) Scale(execTime float64, info commandInfo) {
+	panic("This Function should never be called")
 }
 
 func fixArgs(args []string) []string {
@@ -559,8 +678,8 @@ func fixArgs(args []string) []string {
 func errLog(err string, s string, info commandInfo) {
 	logInfo := global.LogCommandInfo{
 		CmdIndex:     info.CmdIndex,
-		QueueName:    info.Queue.Name,
-		ClusterIndex: info.Queue.KubeContext.ClusterIndex,
+		QueueName:    info.QueueName,
+		ClusterIndex: info.KubeContext.ClusterIndex,
 	}
 	writers.ErrLog(err, s, logInfo)
 }
@@ -568,8 +687,8 @@ func errLog(err string, s string, info commandInfo) {
 func crashLog(err string, info commandInfo) {
 	logInfo := global.LogCommandInfo{
 		CmdIndex:     info.CmdIndex,
-		QueueName:    info.Queue.Name,
-		ClusterIndex: info.Queue.KubeContext.ClusterIndex,
+		QueueName:    info.QueueName,
+		ClusterIndex: info.KubeContext.ClusterIndex,
 	}
 	if clusterUp {
 		writers.CrashLog(err, Some(logInfo), KwokctlDeleteAll)

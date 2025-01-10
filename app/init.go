@@ -3,7 +3,7 @@ package app
 import (
 	"gopkg.in/yaml.v2"
 	"log"
-	"main/configs"
+	"main/apis/v1alpha1"
 	"os"
 )
 
@@ -33,17 +33,31 @@ func Init() {
 		} else {
 			defer file.Close()
 			enc := yaml.NewEncoder(file)
-			err = enc.Encode(configs.Config{
-				Clusters: []configs.Cluster{
+			err = enc.Encode(v1alpha1.Config{
+				Kind:       "SimConfiguration",
+				ApiVersion: "k8s-sim.fbk.eu/v1alpha1",
+				Liqo: v1alpha1.LiqoOpt{
+					Consumer: "Cluster1",
+					Offload: []v1alpha1.LiqoOffload{
+						{
+							Namespace:         "default",
+							ClusterSelector:   []string{"selector1", "selector2"},
+							NamespaceStrategy: "DefaultName",
+							PodStrategy:       "LocalAndRemote",
+						},
+					},
+					RuntimeClass: true,
+				},
+				Clusters: []v1alpha1.Cluster{
 					{
 						ClusterName: "Cluster1",
 						KwokConfigs: []string{
-							"",
+							"--config exampleConf.yaml",
 						},
-						Nodes: []configs.Node{
+						Nodes: []v1alpha1.Node{
 							{
-								ConfigName: "example.yaml",
-								Count:      0,
+								Filename: "example.yaml",
+								Count:    0,
 							},
 						},
 						Audit:    "",
@@ -54,10 +68,10 @@ func Init() {
 						KwokConfigs: []string{
 							"",
 						},
-						Nodes: []configs.Node{
+						Nodes: []v1alpha1.Node{
 							{
-								ConfigName: "example.yaml",
-								Count:      0,
+								Filename: "example.yaml",
+								Count:    0,
 							},
 						},
 						Audit:    "",
@@ -80,35 +94,38 @@ func Init() {
 		} else {
 			defer file.Close()
 			enc := yaml.NewEncoder(file)
-			err = enc.Encode(configs.CommandsConf{
-				Kind:       "",
-				ApiVersion: "",
+			err = enc.Encode(v1alpha1.CommandsConf{
+				Kind:       "SimCommandsConfiguration",
+				ApiVersion: "k8s-sim.fbk.eu/v1alpha1",
 				Metadata: struct {
 					Name string `yaml:"name"`
 				}{},
 				Spec: struct {
-					Aliases []string        `yaml:"aliases"`
-					Queues  []configs.Queue `yaml:"queues"`
+					Aliases []string         `yaml:"aliases,omitempty"`
+					Queues  []v1alpha1.Queue `yaml:"queues"`
 				}{
-					Queues: []configs.Queue{
+					Queues: []v1alpha1.Queue{
 						{
 							Name:       "",
 							Kubeconfig: "",
-							Sequence: []configs.Command{
+							Sequence: []v1alpha1.Command{
 								{
-									Exec:    "<command>",
-									Time:    0,
-									Context: "<context-name>",
+									Exec:      "command",
+									Time:      0,
+									Context:   "context-name",
+									Namespace: "namespace-name",
 								},
 								{
-									Command:  "<wrapper command>",
-									Filename: "<filename>",
-									Count:    1,
+									Command:  "wrapper command",
 									Time:     0,
+									Filename: "filename",
+									Resource: "resource",
+									Count:    1,
 									Args: []string{
-										"<args1>",
+										"args1",
 									},
-									Context: "<context-name>",
+									Context:   "context-name",
+									Namespace: "namespace-name",
 								},
 							},
 						},
