@@ -34,16 +34,30 @@ func Init() {
 			defer file.Close()
 			enc := yaml.NewEncoder(file)
 			err = enc.Encode(configs.Config{
+				Kind:       "SimConfiguration",
+				ApiVersion: "k8s-sim.fbk.eu/v1alpha1",
+				Liqo: configs.LiqoOpt{
+					Consumer: "Cluster1",
+					Offload: []configs.LiqoOffload{
+						{
+							Namespace:         "default",
+							ClusterSelector:   []string{"selector1", "selector2"},
+							NamespaceStrategy: "DefaultName",
+							PodStrategy:       "LocalAndRemote",
+						},
+					},
+					RuntimeClass: true,
+				},
 				Clusters: []configs.Cluster{
 					{
 						ClusterName: "Cluster1",
 						KwokConfigs: []string{
-							"",
+							"--config exampleConf.yaml",
 						},
 						Nodes: []configs.Node{
 							{
-								ConfigName: "example.yaml",
-								Count:      0,
+								Filename: "example.yaml",
+								Count:    0,
 							},
 						},
 						Audit:    "",
@@ -56,8 +70,8 @@ func Init() {
 						},
 						Nodes: []configs.Node{
 							{
-								ConfigName: "example.yaml",
-								Count:      0,
+								Filename: "example.yaml",
+								Count:    0,
 							},
 						},
 						Audit:    "",
@@ -81,13 +95,13 @@ func Init() {
 			defer file.Close()
 			enc := yaml.NewEncoder(file)
 			err = enc.Encode(configs.CommandsConf{
-				Kind:       "",
-				ApiVersion: "",
+				Kind:       "SimCommandsConfiguration",
+				ApiVersion: "k8s-sim.fbk.eu/v1alpha1",
 				Metadata: struct {
 					Name string `yaml:"name"`
 				}{},
 				Spec: struct {
-					Aliases []string        `yaml:"aliases"`
+					Aliases []string        `yaml:"aliases,omitempty"`
 					Queues  []configs.Queue `yaml:"queues"`
 				}{
 					Queues: []configs.Queue{
@@ -96,19 +110,22 @@ func Init() {
 							Kubeconfig: "",
 							Sequence: []configs.Command{
 								{
-									Exec:    "<command>",
-									Time:    0,
-									Context: "<context-name>",
+									Exec:      "command",
+									Time:      0,
+									Context:   "context-name",
+									Namespace: "namespace-name",
 								},
 								{
-									Command:  "<wrapper command>",
-									Filename: "<filename>",
-									Count:    1,
+									Command:  "wrapper command",
 									Time:     0,
+									Filename: "filename",
+									Resource: "resource",
+									Count:    1,
 									Args: []string{
-										"<args1>",
+										"args1",
 									},
-									Context: "<context-name>",
+									Context:   "context-name",
+									Namespace: "namespace-name",
 								},
 							},
 						},

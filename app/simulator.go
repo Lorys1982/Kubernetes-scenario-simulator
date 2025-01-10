@@ -17,7 +17,7 @@ import (
 func Simulation() {
 	configs.NewConfig()
 	global.ConfName = configs.GetCommandsConfName()
-	global.ClusterNames = configs.GetClusterName()
+	global.ClusterNames = configs.GetClusterNames()
 	for _, cluster := range global.ClusterNames {
 		os.MkdirAll(fmt.Sprintf("logs/%s", cluster), os.ModePerm)
 	}
@@ -28,6 +28,9 @@ func Simulation() {
 	}
 	if !CommandExists("kubectl") {
 		log.Fatal("kubectl not installed")
+	}
+	if !CommandExists("liqoctl") {
+		log.Fatal("liqoctl not installed")
 	}
 
 	// Logger Initialization
@@ -40,9 +43,15 @@ func Simulation() {
 	// Fill kubeconf structs
 	configs.ConfPostprocess()
 
+	// If liqo flag is set, install liqo in all clusters, peer consumer and providers
+	if configs.IsLiqoActive() {
+		LiqoInstallAll()
+		LiqoPeerAll()
+		LiqoOffload()
+	}
+
 	// node Creation per cluster
-	clusters := configs.GetClusterName()
-	for i := range clusters {
+	for i := range global.ClusterNames {
 		nodes := configs.GetNodesConf()[i]
 		NodeCreate(nodes, i)
 	}
