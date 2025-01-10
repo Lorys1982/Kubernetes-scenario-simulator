@@ -1,14 +1,14 @@
 package app
 
 import (
-	"main/configs"
+	"main/apis/v1alpha1"
 	. "main/utils"
 	"os/exec"
 	"sync"
 )
 
 func LiqoInstallAll() {
-	clusters := configs.GetClusterNameKubeconf()
+	clusters := v1alpha1.GetClusterNameKubeconf()
 	wg := &sync.WaitGroup{}
 	for i := range clusters {
 		wg.Add(1)
@@ -20,13 +20,13 @@ func LiqoInstallAll() {
 func liqoInstall(clusterIndex int, wg *sync.WaitGroup) {
 	info := commandInfo{
 		QueueName:   "LiqoInstall",
-		Kubeconfig:  configs.GetKubeConfigPath(clusterIndex),
-		KubeContext: configs.ClusterKubeconfigs[clusterIndex].Contexts[0],
+		Kubeconfig:  v1alpha1.GetKubeConfigPath(clusterIndex),
+		KubeContext: v1alpha1.ClusterKubeconfigs[clusterIndex].Contexts[0],
 		CmdIndex:    0,
 	}
-	nodeName := "kwok" + "-" + configs.GetClusterName(clusterIndex) + "-" + "control-plane"
+	nodeName := "kwok" + "-" + v1alpha1.GetClusterName(clusterIndex) + "-" + "control-plane"
 	args := []string{"install", "kind", "--context", info.KubeContext.Name}
-	if configs.GetLiqoConf().RuntimeClass {
+	if v1alpha1.GetLiqoConf().RuntimeClass {
 		args = append(args, "--set", "offloading.runtimeClass.enabled=true")
 	}
 	KubectlUncordon(0, info, nodeName)
@@ -39,15 +39,15 @@ func liqoInstall(clusterIndex int, wg *sync.WaitGroup) {
 }
 
 func LiqoPeerAll() {
-	consumerCluster, consumerIndex := configs.GetLiqoConsumerCluster()
+	consumerCluster, consumerIndex := v1alpha1.GetLiqoConsumerCluster()
 	wg := &sync.WaitGroup{}
 	info := commandInfo{
 		QueueName:   "LiqoPeer",
-		Kubeconfig:  configs.GetKubeConfigPath(consumerIndex),
-		KubeContext: configs.ClusterKubeconfigs[consumerIndex].Contexts[0],
+		Kubeconfig:  v1alpha1.GetKubeConfigPath(consumerIndex),
+		KubeContext: v1alpha1.ClusterKubeconfigs[consumerIndex].Contexts[0],
 		CmdIndex:    0,
 	}
-	for _, cluster := range configs.GetClusterNames() {
+	for _, cluster := range v1alpha1.GetClusterNames() {
 		if cluster != consumerCluster {
 			wg.Add(1)
 			go liqoPeer(cluster, info, wg)
@@ -57,7 +57,7 @@ func LiqoPeerAll() {
 }
 
 func liqoPeer(cluster string, info commandInfo, wg *sync.WaitGroup) {
-	cmd := exec.Command("liqoctl", "peer", "--remote-kubeconfig", configs.GenKubeConfigPath(cluster),
+	cmd := exec.Command("liqoctl", "peer", "--remote-kubeconfig", v1alpha1.GenKubeConfigPath(cluster),
 		"--server-service-type", "NodePort", "--context", info.KubeContext.Name)
 	err := commandRun(cmd, 0, info)
 	if err != nil {
@@ -67,15 +67,15 @@ func liqoPeer(cluster string, info commandInfo, wg *sync.WaitGroup) {
 }
 
 func LiqoOffload() {
-	_, consumerIndex := configs.GetLiqoConsumerCluster()
+	_, consumerIndex := v1alpha1.GetLiqoConsumerCluster()
 	var args []string
 	info := commandInfo{
 		QueueName:   "LiqoOffload",
-		Kubeconfig:  configs.GetKubeConfigPath(consumerIndex),
-		KubeContext: configs.ClusterKubeconfigs[consumerIndex].Contexts[0],
+		Kubeconfig:  v1alpha1.GetKubeConfigPath(consumerIndex),
+		KubeContext: v1alpha1.ClusterKubeconfigs[consumerIndex].Contexts[0],
 		CmdIndex:    0,
 	}
-	for _, offloadInfo := range configs.GetLiqoConf().Offload {
+	for _, offloadInfo := range v1alpha1.GetLiqoConf().Offload {
 		KubectlCreate(Some("namespace"), None[string](), 0, info, offloadInfo.Namespace)
 		args = append(args, "offload", "namespace", offloadInfo.Namespace)
 		if len(offloadInfo.NamespaceStrategy) != 0 {
@@ -94,12 +94,12 @@ func LiqoOffload() {
 			crashLog(err.Error(), info)
 		}
 	}
-	for clusterIndex := range configs.GetClusterNames() {
-		nodeName := "kwok" + "-" + configs.GetClusterName(clusterIndex) + "-" + "control-plane"
+	for clusterIndex := range v1alpha1.GetClusterNames() {
+		nodeName := "kwok" + "-" + v1alpha1.GetClusterName(clusterIndex) + "-" + "control-plane"
 		info = commandInfo{
 			QueueName:   "LiqoEnd",
-			Kubeconfig:  configs.GetKubeConfigPath(clusterIndex),
-			KubeContext: configs.ClusterKubeconfigs[clusterIndex].Contexts[0],
+			Kubeconfig:  v1alpha1.GetKubeConfigPath(clusterIndex),
+			KubeContext: v1alpha1.ClusterKubeconfigs[clusterIndex].Contexts[0],
 			CmdIndex:    0,
 		}
 		KubectlCordon(0, info, nodeName)

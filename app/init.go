@@ -3,7 +3,7 @@ package app
 import (
 	"gopkg.in/yaml.v2"
 	"log"
-	"main/configs"
+	"main/apis/v1alpha1"
 	"os"
 )
 
@@ -33,12 +33,12 @@ func Init() {
 		} else {
 			defer file.Close()
 			enc := yaml.NewEncoder(file)
-			err = enc.Encode(configs.Config{
+			err = enc.Encode(v1alpha1.Config{
 				Kind:       "SimConfiguration",
 				ApiVersion: "k8s-sim.fbk.eu/v1alpha1",
-				Liqo: configs.LiqoOpt{
+				Liqo: v1alpha1.LiqoOpt{
 					Consumer: "Cluster1",
-					Offload: []configs.LiqoOffload{
+					Offload: []v1alpha1.LiqoOffload{
 						{
 							Namespace:         "default",
 							ClusterSelector:   []string{"selector1", "selector2"},
@@ -48,13 +48,13 @@ func Init() {
 					},
 					RuntimeClass: true,
 				},
-				Clusters: []configs.Cluster{
+				Clusters: []v1alpha1.Cluster{
 					{
 						ClusterName: "Cluster1",
 						KwokConfigs: []string{
 							"--config exampleConf.yaml",
 						},
-						Nodes: []configs.Node{
+						Nodes: []v1alpha1.Node{
 							{
 								Filename: "example.yaml",
 								Count:    0,
@@ -68,7 +68,7 @@ func Init() {
 						KwokConfigs: []string{
 							"",
 						},
-						Nodes: []configs.Node{
+						Nodes: []v1alpha1.Node{
 							{
 								Filename: "example.yaml",
 								Count:    0,
@@ -94,21 +94,21 @@ func Init() {
 		} else {
 			defer file.Close()
 			enc := yaml.NewEncoder(file)
-			err = enc.Encode(configs.CommandsConf{
+			err = enc.Encode(v1alpha1.CommandsConf{
 				Kind:       "SimCommandsConfiguration",
 				ApiVersion: "k8s-sim.fbk.eu/v1alpha1",
 				Metadata: struct {
 					Name string `yaml:"name"`
 				}{},
 				Spec: struct {
-					Aliases []string        `yaml:"aliases,omitempty"`
-					Queues  []configs.Queue `yaml:"queues"`
+					Aliases []string         `yaml:"aliases,omitempty"`
+					Queues  []v1alpha1.Queue `yaml:"queues"`
 				}{
-					Queues: []configs.Queue{
+					Queues: []v1alpha1.Queue{
 						{
 							Name:       "",
 							Kubeconfig: "",
-							Sequence: []configs.Command{
+							Sequence: []v1alpha1.Command{
 								{
 									Exec:      "command",
 									Time:      0,

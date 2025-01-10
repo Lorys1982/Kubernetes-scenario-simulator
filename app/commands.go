@@ -7,7 +7,7 @@ import (
 	"github.com/notEpsilon/go-pair"
 	"io"
 	"log"
-	"main/configs"
+	"main/apis/v1alpha1"
 	"main/global"
 	. "main/utils"
 	"main/writers"
@@ -29,14 +29,14 @@ var crashLock sync.Mutex
 var crashBool = false
 var clusterUp = false
 
-type kube configs.Kube
-type node []configs.Node
-type namespace configs.Namespace
+type kube v1alpha1.Kube
+type node []v1alpha1.Node
+type namespace v1alpha1.Namespace
 
 type commandInfo struct {
 	QueueName   string
 	Kubeconfig  string
-	KubeContext configs.Context
+	KubeContext v1alpha1.Context
 	Namespace   string
 	CmdIndex    int
 	ExecDir     string
@@ -73,7 +73,7 @@ func CommandExists(command string) bool {
 	return err == nil
 }
 
-func concurrentCommandRun(cmd *exec.Cmd, cmdSpecs configs.Command, wg *sync.WaitGroup, info commandInfo) {
+func concurrentCommandRun(cmd *exec.Cmd, cmdSpecs v1alpha1.Command, wg *sync.WaitGroup, info commandInfo) {
 	defer wg.Done()
 	time.Sleep(time.Duration(cmdSpecs.Time*float64(time.Second)) * time.Nanosecond)
 	log.Printf("Execution at Time: %f\n", cmdSpecs.Time)
@@ -83,7 +83,7 @@ func concurrentCommandRun(cmd *exec.Cmd, cmdSpecs configs.Command, wg *sync.Wait
 	_ = commandRun(cmd, time.Since(global.StartTime).Seconds(), info)
 }
 
-func concurrentCommandCleanRun(cmd *exec.Cmd, cmdSpecs configs.Command, wg *sync.WaitGroup, info commandInfo) {
+func concurrentCommandCleanRun(cmd *exec.Cmd, cmdSpecs v1alpha1.Command, wg *sync.WaitGroup, info commandInfo) {
 	defer wg.Done()
 	time.Sleep(time.Duration(cmdSpecs.Time*float64(time.Second)) * time.Nanosecond)
 	log.Printf("Execution at Time: %f\n", cmdSpecs.Time)
@@ -169,7 +169,7 @@ func commandCleanRun(cmd *exec.Cmd, execTime float64, info commandInfo) error {
 	return cmdErr
 }
 
-func concurrentExecWrapper(fullCmd []string, cmdSpecs configs.Command, wg *sync.WaitGroup, info commandInfo) {
+func concurrentExecWrapper(fullCmd []string, cmdSpecs v1alpha1.Command, wg *sync.WaitGroup, info commandInfo) {
 	defer wg.Done()
 	time.Sleep(time.Duration(cmdSpecs.Time*float64(time.Second)) * time.Nanosecond)
 	log.Printf("Execution at Time: %f\n", cmdSpecs.Time)
@@ -179,7 +179,7 @@ func concurrentExecWrapper(fullCmd []string, cmdSpecs configs.Command, wg *sync.
 	execWrapper(fullCmd, cmdSpecs, info)
 }
 
-func execWrapper(fullCmd []string, cmdSpecs configs.Command, info commandInfo) {
+func execWrapper(fullCmd []string, cmdSpecs v1alpha1.Command, info commandInfo) {
 	var object Operations
 	resource := fullCmd[0]
 	action := fullCmd[1]
@@ -230,7 +230,7 @@ func execWrapper(fullCmd []string, cmdSpecs configs.Command, info commandInfo) {
 	}
 }
 
-func ConcurrentQueueRun(clusterQueues [][]configs.Queue) {
+func ConcurrentQueueRun(clusterQueues [][]v1alpha1.Queue) {
 	var wgQueues sync.WaitGroup
 	global.StartTime = time.Now()
 	for _, queues := range clusterQueues {
@@ -242,7 +242,7 @@ func ConcurrentQueueRun(clusterQueues [][]configs.Queue) {
 	wgQueues.Wait()
 }
 
-func ConcurrentCommandsRun(queue configs.Queue, wgQueues *sync.WaitGroup) {
+func ConcurrentCommandsRun(queue v1alpha1.Queue, wgQueues *sync.WaitGroup) {
 	wgCommands := sync.WaitGroup{}
 	cmds := queue.Sequence
 	sort.Slice(cmds, func(i, j int) bool {
@@ -297,9 +297,9 @@ func ConcurrentCommandsRun(queue configs.Queue, wgQueues *sync.WaitGroup) {
 //	true -> cluster creation
 func clusterArgs(selector bool) [][]string {
 	var command [][]string
-	clusters := configs.GetClusterNames()
-	kwokConf := configs.GetKwokConf()
-	auditConf := configs.GetAuditConf()
+	clusters := v1alpha1.GetClusterNames()
+	kwokConf := v1alpha1.GetKwokConf()
+	auditConf := v1alpha1.GetAuditConf()
 
 	if selector {
 		for range clusters {
@@ -325,7 +325,7 @@ func clusterArgs(selector bool) [][]string {
 		if selector && auditConf[i] != "" {
 			command[i] = append(command[i], "--kube-audit-policy", auditConf[i])
 		}
-		if selector && configs.IsLiqoActive() {
+		if selector && v1alpha1.IsLiqoActive() {
 			command[i] = append(command[i], "--runtime", "kind")
 		}
 	}
@@ -340,7 +340,7 @@ func KwokctlCreateAll() {
 		wg.Add(1)
 		info := commandInfo{
 			QueueName: "KwokctlCreate",
-			KubeContext: configs.Context{
+			KubeContext: v1alpha1.Context{
 				ClusterIndex: i,
 			},
 			CmdIndex: 0,
@@ -352,9 +352,9 @@ func KwokctlCreateAll() {
 		// plus, to use more than 2 clusters we need to run this command
 		// sudo sysctl fs.inotify.max_user_watches=524288
 		// sudo sysctl fs.inotify.max_user_instances=512
-		if configs.IsLiqoActive() {
+		if v1alpha1.IsLiqoActive() {
 			go kwokctlCreate(args[i], info, &wg)
-			nodeName := "kwok" + "-" + configs.GetClusterName(i) + "-" + "control-plane"
+			nodeName := "kwok" + "-" + v1alpha1.GetClusterName(i) + "-" + "control-plane"
 			err := WaitForContainer(nodeName)
 			if err != nil {
 				crashLog(err.Error(), info)
@@ -379,7 +379,7 @@ func kwokctlCreate(args []string, info commandInfo, wg *sync.WaitGroup) {
 func KwokctlDeleteAll() {
 	wg := sync.WaitGroup{}
 	args := clusterArgs(false)
-	clusters := configs.GetClusterNames()
+	clusters := v1alpha1.GetClusterNames()
 	crashHalt(false)
 	for i := range args {
 		wg.Add(1)
@@ -398,7 +398,7 @@ func kwokctlDelete(args []string, cluster string, clusterIndex int, wg *sync.Wai
 	cmd := exec.Command("kwokctl", args...)
 	err := commandCleanRun(cmd, time.Since(global.StartTime).Seconds(), commandInfo{
 		QueueName: "KwokctlDelete",
-		KubeContext: configs.Context{
+		KubeContext: v1alpha1.Context{
 			ClusterIndex: clusterIndex,
 		},
 		CmdIndex: 0,
@@ -506,8 +506,8 @@ func kubectlScopeArgs(args []string, info commandInfo) []string {
 func NodeCreate(nodes node, clusterIndex int) {
 	nodes.Create(0, commandInfo{
 		QueueName:   "Topology",
-		Kubeconfig:  configs.GetKubeConfigPath(clusterIndex),
-		KubeContext: configs.ClusterKubeconfigs[clusterIndex].Contexts[0],
+		Kubeconfig:  v1alpha1.GetKubeConfigPath(clusterIndex),
+		KubeContext: v1alpha1.ClusterKubeconfigs[clusterIndex].Contexts[0],
 		CmdIndex:    0,
 		ExecDir:     "configs/topology",
 	})
@@ -516,8 +516,8 @@ func NodeCreate(nodes node, clusterIndex int) {
 func NodeDelete(nodes node, clusterIndex int) {
 	nodes.Delete(0, commandInfo{
 		QueueName:   "Topology",
-		Kubeconfig:  configs.GetKubeConfigPath(clusterIndex),
-		KubeContext: configs.ClusterKubeconfigs[clusterIndex].Contexts[0],
+		Kubeconfig:  v1alpha1.GetKubeConfigPath(clusterIndex),
+		KubeContext: v1alpha1.ClusterKubeconfigs[clusterIndex].Contexts[0],
 		CmdIndex:    0,
 		ExecDir:     "configs/topology",
 	})

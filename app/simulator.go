@@ -3,7 +3,7 @@ package app
 import (
 	"fmt"
 	"log"
-	"main/configs"
+	"main/apis/v1alpha1"
 	"main/global"
 	"main/writers"
 	"os"
@@ -15,9 +15,9 @@ import (
 // running all the commands and deleting it at last, logging everything
 // in the logs folder
 func Simulation() {
-	configs.NewConfig()
-	global.ConfName = configs.GetCommandsConfName()
-	global.ClusterNames = configs.GetClusterNames()
+	v1alpha1.NewConfig()
+	global.ConfName = v1alpha1.GetCommandsConfName()
+	global.ClusterNames = v1alpha1.GetClusterNames()
 	for _, cluster := range global.ClusterNames {
 		os.MkdirAll(fmt.Sprintf("logs/%s", cluster), os.ModePerm)
 	}
@@ -41,10 +41,10 @@ func Simulation() {
 	KwokctlCreateAll()
 
 	// Fill kubeconf structs
-	configs.ConfPostprocess()
+	v1alpha1.ConfPostprocess()
 
 	// If liqo flag is set, install liqo in all clusters, peer consumer and providers
-	if configs.IsLiqoActive() {
+	if v1alpha1.IsLiqoActive() {
 		LiqoInstallAll()
 		LiqoPeerAll()
 		LiqoOffload()
@@ -52,12 +52,12 @@ func Simulation() {
 
 	// node Creation per cluster
 	for i := range global.ClusterNames {
-		nodes := configs.GetNodesConf()[i]
+		nodes := v1alpha1.GetNodesConf()[i]
 		NodeCreate(nodes, i)
 	}
 
 	// Executes the commands with the specified delay
-	ConcurrentQueueRun(configs.GetQueues())
+	ConcurrentQueueRun(v1alpha1.GetQueues())
 
 	// Cluster Deletion
 	KwokctlDeleteAll()
