@@ -192,6 +192,7 @@ func execWrapper(fullCmd []string, cmdSpecs configs.Command, info commandInfo) {
 			{
 				Filename: path.Join("configs/command_configs", cmdSpecs.Filename),
 				Count:    cmdSpecs.Count,
+				Args:     cmdSpecs.Args,
 			},
 		}
 	case "kube":
@@ -203,7 +204,8 @@ func execWrapper(fullCmd []string, cmdSpecs configs.Command, info commandInfo) {
 		}
 	case "namespace":
 		object = namespace{
-			Args: cmdSpecs.Args,
+			Filename: cmdSpecs.Filename,
+			Args:     cmdSpecs.Args,
 		}
 	default:
 		crashLog(fmt.Sprintf("Resource %s does not exist", fullCmd[0]), info)
@@ -417,8 +419,13 @@ func KubectlApply(toApply string, execTime float64, info commandInfo, cmdArgs ..
 	_ = commandRun(cmd, execTime, info)
 }
 
-func KubectlCreate(resource string, execTime float64, info commandInfo, cmdArgs ...string) {
-	args := []string{"create", resource}
+func KubectlCreate(resource Option[string], filename Option[string], execTime float64, info commandInfo, cmdArgs ...string) {
+	args := []string{"create"}
+	if resource.IsSome() {
+		args = append(args, resource.GetSome())
+	} else {
+		args = append(args, "-f", filename.GetSome())
+	}
 	args = append(args, cmdArgs...)
 	args = kubectlScopeArgs(args, info)
 
@@ -426,8 +433,13 @@ func KubectlCreate(resource string, execTime float64, info commandInfo, cmdArgs 
 	_ = commandRun(cmd, execTime, info)
 }
 
-func KubectlDelete(resource string, execTime float64, info commandInfo, cmdArgs ...string) {
-	args := []string{"delete", resource}
+func KubectlDelete(resource Option[string], filename Option[string], execTime float64, info commandInfo, cmdArgs ...string) {
+	args := []string{"delete"}
+	if resource.IsSome() {
+		args = append(args, resource.GetSome())
+	} else {
+		args = append(args, "-f", filename.GetSome())
+	}
 	args = append(args, cmdArgs...)
 	args = kubectlScopeArgs(args, info)
 
@@ -445,8 +457,13 @@ func KubectlGet(resource string, execTime float64, info commandInfo, cmdArgs ...
 	_ = commandRun(cmd, execTime, info)
 }
 
-func kubectScale(resource string, replicas int, execTime float64, info commandInfo, cmdArgs ...string) {
-	args := []string{"scale", resource}
+func kubectScale(resource Option[string], filename Option[string], replicas int, execTime float64, info commandInfo, cmdArgs ...string) {
+	args := []string{"scale"}
+	if resource.IsSome() {
+		args = append(args, resource.GetSome())
+	} else {
+		args = append(args, "-f", filename.GetSome())
+	}
 	args = append(args, cmdArgs...)
 	args = append(args, "--replicas", strconv.Itoa(replicas))
 	args = kubectlScopeArgs(args, info)
@@ -553,7 +570,7 @@ func (nodes node) Delete(execTime float64, info commandInfo) {
 					"Delete node", info)
 				break
 			}
-			KubectlDelete("no", execTime, info, []string{nodeName + "-" + strconv.Itoa(currentIndex)}...)
+			KubectlDelete(Some("no"), None[string](), execTime, info, []string{nodeName + "-" + strconv.Itoa(currentIndex)}...)
 			currentIndex--
 			node.SetCurrentIndex(currentIndex+1, info.KubeContext.ClusterIndex)
 			nodeMutex.Unlock()
@@ -566,7 +583,7 @@ func (nodes node) Apply(execTime float64, info commandInfo) {
 }
 
 func (nodes node) Get(execTime float64, info commandInfo) {
-	KubectlGet("no", execTime, info)
+	KubectlGet("no", execTime, info, nodes[0].Args...)
 }
 
 func (nodes node) Scale(execTime float64, info commandInfo) {
@@ -584,15 +601,20 @@ func (nodes node) Scale(execTime float64, info commandInfo) {
 
 func (k kube) Create(execTime float64, info commandInfo) {
 	k.Args = fixArgs(k.Args)
-	KubectlCreate(k.Resource, execTime, info, k.Args...)
+	if k.Filename != "" {
+		KubectlCreate(None[string](), Some(k.Filename), execTime, info, k.Args...)
+	} else {
+		KubectlCreate(Some(k.Resource), None[string](), execTime, info, k.Args...)
+	}
 }
 
 func (k kube) Delete(execTime float64, info commandInfo) {
 	k.Args = fixArgs(k.Args)
 	if k.Filename != "" {
-		k.Args = append([]string{"-f", k.Filename}, k.Args...)
+		KubectlDelete(None[string](), Some(k.Filename), execTime, info, k.Args...)
+	} else {
+		KubectlDelete(Some(k.Resource), None[string](), execTime, info, k.Args...)
 	}
-	KubectlDelete(k.Resource, execTime, info, k.Args...)
 }
 
 func (k kube) Apply(execTime float64, info commandInfo) {
@@ -608,19 +630,28 @@ func (k kube) Get(execTime float64, info commandInfo) {
 func (k kube) Scale(execTime float64, info commandInfo) {
 	k.Args = fixArgs(k.Args)
 	if k.Filename != "" {
-		k.Args = append([]string{"-f", k.Filename}, k.Args...)
+		kubectScale(None[string](), Some(k.Filename), k.Count, execTime, info, k.Args...)
+	} else {
+		kubectScale(Some(k.Resource), None[string](), k.Count, execTime, info, k.Args...)
 	}
-	kubectScale(k.Resource, k.Count, execTime, info, k.Args...)
 }
 
 func (n namespace) Create(execTime float64, info commandInfo) {
 	n.Args = fixArgs(n.Args)
-	KubectlCreate("namespace", execTime, info, n.Args...)
+	if n.Filename != "" {
+		KubectlDelete(None[string](), Some(n.Filename), execTime, info, n.Args...)
+	} else {
+		KubectlCreate(Some("namespace"), None[string](), execTime, info, n.Args...)
+	}
 }
 
 func (n namespace) Delete(execTime float64, info commandInfo) {
 	n.Args = fixArgs(n.Args)
-	KubectlDelete("namespace", execTime, info, n.Args...)
+	if n.Filename != "" {
+		KubectlDelete(None[string](), Some(n.Filename), execTime, info, n.Args...)
+	} else {
+		KubectlDelete(Some("namespace"), None[string](), execTime, info, n.Args...)
+	}
 }
 
 func (n namespace) Apply(execTime float64, info commandInfo) {

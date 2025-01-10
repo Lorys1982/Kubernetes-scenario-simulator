@@ -32,7 +32,7 @@ type KubeCluster struct {
 type Context struct {
 	ContextInfo  ContextInfo `yaml:"context"`
 	Name         string      `yaml:"name"`
-	ClusterIndex int
+	ClusterIndex int         `yaml:"-"`
 }
 
 type ContextInfo struct {
@@ -49,7 +49,8 @@ type Kube struct {
 }
 
 type Namespace struct {
-	Args []string
+	Filename string
+	Args     []string
 }
 
 type Cluster struct {
@@ -65,20 +66,22 @@ type LiqoOffload struct {
 	ClusterSelector   []string `yaml:"clusterSelector"`   // Default: empty
 	NamespaceStrategy string   `yaml:"namespaceStrategy"` // Default: DefaultName
 	PodStrategy       string   `yaml:"podStrategy"`       // Default: LocalAndRemote
-	RuntimeClass      string   `yaml:"runtimeClass"`      // Default: empty
 }
 
 type LiqoOpt struct {
-	Consumer string        `yaml:"consumer"`
-	Offload  []LiqoOffload `yaml:"offload,omitempty"`
+	Consumer     string        `yaml:"consumer"`
+	Offload      []LiqoOffload `yaml:"offload,omitempty"`
+	RuntimeClass bool          `yaml:"runtimeClass"` // Default: empty
 }
 
 // Config struct contains all the data in
 // the main config file about the topology of the cluster(s)
 type Config struct {
-	Liqo              LiqoOpt
+	Kind              string    `yaml:"kind"`
+	ApiVersion        string    `yaml:"apiVersion"`
+	Liqo              LiqoOpt   `yaml:"liqo"`
 	Clusters          []Cluster `yaml:"clusters"`
-	LiqoConsumerIndex int
+	LiqoConsumerIndex int       `yaml:"-"`
 }
 
 // Command struct contains a single command of the
@@ -87,13 +90,13 @@ type Command struct {
 	Exec      string   `yaml:"exec,omitempty"`
 	Command   string   `yaml:"command,omitempty"`
 	Time      float64  `yaml:"time"`
+	Resource  string   `yaml:"resource,omitempty"`
 	Filename  string   `yaml:"filename,omitempty"`
 	Count     int      `yaml:"count,omitempty"`
 	Args      []string `yaml:"args,omitempty"`
 	Context   string   `yaml:"context,omitempty"`
 	Namespace string   `yaml:"namespace,omitempty"`
-	Resource  string   `yaml:"resource,omitempty"`
-	index     int
+	index     int      `yaml:"-"`
 }
 
 // Queue struct contains a Command sequence and the
@@ -102,7 +105,7 @@ type Queue struct {
 	Name        string    `yaml:"name"`
 	Kubeconfig  string    `yaml:"kubeconfig"`
 	Sequence    []Command `yaml:"sequence"`
-	KubeContext Context
+	KubeContext Context   `yaml:"-"`
 }
 
 // CommandsConf struct contains the data of the
@@ -114,7 +117,7 @@ type CommandsConf struct {
 		Name string `yaml:"name"`
 	} `yaml:"metadata"`
 	Spec struct {
-		Aliases []string `yaml:"aliases"`
+		Aliases []string `yaml:"aliases,omitempty"`
 		Queues  []Queue  `yaml:"queues"`
 	}
 }
@@ -136,9 +139,10 @@ type nodeCurrentReplicas struct {
 
 // Node struct contains generic nodes information
 type Node struct {
-	Filename string `yaml:"filename"`
-	Count    int    `yaml:"count"`
-	name     string
+	Filename string   `yaml:"filename"`
+	Count    int      `yaml:"count"`
+	Args     []string `yaml:"args,omitempty"`
+	name     string   `yaml:"-"`
 }
 
 // GetName returns the name from metadata of the

@@ -2,6 +2,7 @@ package app
 
 import (
 	"main/configs"
+	. "main/utils"
 	"os/exec"
 	"sync"
 )
@@ -24,6 +25,10 @@ func liqoInstall(clusterIndex int, wg *sync.WaitGroup) {
 		CmdIndex:    0,
 	}
 	nodeName := "kwok" + "-" + configs.GetClusterName(clusterIndex) + "-" + "control-plane"
+	args := []string{"install", "kind", "--context", info.KubeContext.Name}
+	if configs.GetLiqoConf().RuntimeClass {
+		args = append(args, "--set", "offloading.runtimeClass.enabled=true")
+	}
 	KubectlUncordon(0, info, nodeName)
 	cmd := exec.Command("liqoctl", "install", "kind", "--context", info.KubeContext.Name)
 	err := commandRun(cmd, 0, info)
@@ -71,7 +76,7 @@ func LiqoOffload() {
 		CmdIndex:    0,
 	}
 	for _, offloadInfo := range configs.GetLiqoConf().Offload {
-		KubectlCreate("namespace", 0, info, offloadInfo.Namespace)
+		KubectlCreate(Some("namespace"), None[string](), 0, info, offloadInfo.Namespace)
 		args = append(args, "offload", "namespace", offloadInfo.Namespace)
 		if len(offloadInfo.NamespaceStrategy) != 0 {
 			args = append(args, "--namespace-mapping-strategy", offloadInfo.NamespaceStrategy)
